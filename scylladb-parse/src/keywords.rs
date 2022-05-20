@@ -4,7 +4,7 @@ use super::{
     Parse,
     StatementStream,
 };
-use scylla_parse_macros::{
+use scylladb_parse_macros::{
     ParseFromStr,
     ToTokens,
 };

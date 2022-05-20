@@ -1,4 +1,4 @@
-use scylla_parse::DeleteStatement;
+use scylladb_parse::DeleteStatement;
 
 use super::*;
 

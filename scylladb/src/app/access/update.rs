@@ -1,4 +1,4 @@
-use scylla_parse::UpdateStatement;
+use scylladb_parse::UpdateStatement;
 
 use super::*;
 

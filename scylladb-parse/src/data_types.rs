@@ -34,7 +34,7 @@ use derive_more::{
     From,
     TryInto,
 };
-use scylla_parse_macros::{
+use scylladb_parse_macros::{
     ParseFromStr,
     ToTokens,
 };

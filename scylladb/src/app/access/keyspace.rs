@@ -3,7 +3,7 @@ use crate::cql::{
     RowsDecoder,
     VoidDecoder,
 };
-use scylla_parse::{
+use scylladb_parse::{
     CreateKeyspaceStatement,
     DropKeyspaceStatement,
     KeyspaceOpts,
@@ -42,7 +42,7 @@ pub trait Keyspace: Send + Sized + Sync + Clone {
 
     /// Retrieve a CREATE KEYSPACE statement builder for this keyspace name
     fn create(&self) -> CreateKeyspaceStatement {
-        scylla_parse::CreateKeyspaceStatementBuilder::default()
+        scylladb_parse::CreateKeyspaceStatementBuilder::default()
             .keyspace(self.name())
             .options(self.opts())
             .if_not_exists()
@@ -52,7 +52,7 @@ pub trait Keyspace: Send + Sized + Sync + Clone {
 
     /// Retrieve a DROP KEYSPACE statement builder for this keyspace name
     fn drop(&self) -> DropKeyspaceStatement {
-        scylla_parse::DropKeyspaceStatementBuilder::default()
+        scylladb_parse::DropKeyspaceStatementBuilder::default()
             .keyspace(self.name())
             .if_exists()
             .build()

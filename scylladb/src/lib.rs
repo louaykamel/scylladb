@@ -41,6 +41,6 @@ pub mod prelude {
         *,
     };
     pub use overclock::core::*;
-    pub use scylla_parse::*;
+    pub use scylladb_parse::*;
     pub use scylla_rs_macros::*;
 }

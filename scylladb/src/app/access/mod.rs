@@ -93,7 +93,7 @@ pub use prepare::{
     GetStaticPrepareRequest,
     PrepareRequest,
 };
-use scylla_parse::*;
+use scylladb_parse::*;
 pub use select::{
     AsDynamicSelectRequest,
     GetDynamicSelectRequest,

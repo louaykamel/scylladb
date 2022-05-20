@@ -1,5 +1,5 @@
 use super::*;
-use scylla_parse::DataManipulationStatement;
+use scylladb_parse::DataManipulationStatement;
 use std::fmt::Debug;
 
 /// A statement prepare worker

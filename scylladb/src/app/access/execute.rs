@@ -172,7 +172,7 @@ impl From<CommonRequest> for ExecuteRequest {
 }
 
 impl TryFrom<ExecuteRequest> for CommonRequest {
-    type Error = <scylla_parse::Statement as std::convert::TryInto<scylla_parse::DataManipulationStatement>>::Error;
+    type Error = <scylladb_parse::Statement as std::convert::TryInto<scylladb_parse::DataManipulationStatement>>::Error;
     fn try_from(req: ExecuteRequest) -> Result<Self, Self::Error> {
         Ok(CommonRequest {
             token: req.token,

@@ -1,4 +1,4 @@
-use scylla_parse::InsertStatement;
+use scylladb_parse::InsertStatement;
 
 use super::*;
 
