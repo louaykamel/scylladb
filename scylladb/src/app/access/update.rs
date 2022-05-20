@@ -7,7 +7,7 @@ use super::*;
 ///
 /// ## Example
 /// ```
-/// use scylla_rs::app::access::*;
+/// use scylladb::app::access::*;
 /// #[derive(Clone, Debug)]
 /// struct MyKeyspace {
 ///     pub name: String,
@@ -88,7 +88,7 @@ pub trait GetStaticUpdateRequest<K, V, U>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::app::access::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -169,7 +169,7 @@ pub trait GetStaticUpdateRequest<K, V, U>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::app::access::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -250,7 +250,7 @@ pub trait GetStaticUpdateRequest<K, V, U>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::app::access::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -336,7 +336,7 @@ pub trait GetDynamicUpdateRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::app::access::*;
     /// "my_keyspace"
     ///     .update_with(
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?"),
@@ -375,7 +375,7 @@ pub trait GetDynamicUpdateRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::app::access::*;
     /// "my_keyspace"
     ///     .update_query_with(
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?"),
@@ -418,7 +418,7 @@ pub trait GetDynamicUpdateRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::app::access::*;
     /// "my_keyspace"
     ///     .update_prepared_with(
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?"),
@@ -468,7 +468,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::app::access::*;
     /// parse_statement!("UPDATE my_keyspace.my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
     ///     .as_update(&[&3], &[&4.0, &5.0], StatementType::Query)
     ///     .consistency(Consistency::One)
@@ -500,7 +500,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::app::access::*;
     /// parse_statement!("UPDATE my_keyspace.my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
     ///     .as_update_query(&[&3], &[&4.0, &5.0])
     ///     .consistency(Consistency::One)
@@ -526,7 +526,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::app::access::*;
     /// parse_statement!("UPDATE my_keyspace.my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
     ///     .as_update_prepared(&[&3], &[&4.0, &5.0])
     ///     .consistency(Consistency::One)

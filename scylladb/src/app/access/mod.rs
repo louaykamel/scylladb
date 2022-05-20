@@ -580,7 +580,7 @@ impl<T> Deref for DecodeResult<T> {
 
 #[cfg(test)]
 mod tests {
-    use scylla_rs_macros::parse_statement;
+    use scylladb_macros::parse_statement;
 
     use super::*;
     use crate::{
@@ -807,7 +807,7 @@ mod tests {
             .expect("Failed to acquire cluster handle!");
         cluster_handle.add_node(node).await.expect("Failed to add node!");
         cluster_handle.build_ring().await.expect("Failed to build ring!");
-        backstage::spawn_task("adding node task", async move {
+        overclock::spawn_task("adding node task", async move {
             "scylla_example"
                 .insert_query_with(
                     parse_statement!("INSERT INTO test (key, data) VALUES (?, ?)"),

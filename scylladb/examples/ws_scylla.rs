@@ -11,7 +11,7 @@ async fn main() {
         .backserver("127.0.0.1:10000".parse().unwrap())
         .await
         .expect("Failed to start backserver!");
-    backstage::spawn_task("adding node task", ws_client());
+    overclock::spawn_task("adding node task", ws_client());
     runtime
         .block_on()
         .await
