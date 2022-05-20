@@ -12,7 +12,7 @@ use quote::{
     ToTokens,
     __private::TokenStream,
 };
-use scylla_parse_macros::{
+use scylladb_parse_macros::{
     ParseFromStr,
     ToTokens,
 };
