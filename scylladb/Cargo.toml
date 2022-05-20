@@ -1,0 +1,78 @@
+[package]
+name = "scylladb"
+version = "0.1.0"
+authors = ["Louay Kamel"]
+edition = "2021"
+license-file = "LICENSE"
+repository = "https://github.com/louaykamel/scylladb"
+description = "An async ScyllaDB driver built on an actor-model framework"
+keywords = ["actor", "scylla", "cassandra", "database", "driver"]
+exclude = [".github/**/*"]
+
+[dependencies]
+# CQL
+lz4 = "1.23"
+snap = "1.0"
+port_scanner = "0.1"
+tokio = { version = "1.18", features = ["io-util", "net"] }
+anyhow = "1.0"
+log = "0.4"
+thiserror = "1.0"
+num-derive = "0.3"
+num-traits = "0.2"
+md5 = "0.7"
+scylla-rs-macros = { path = "../scylla-macros" }
+scylla-parse = { path = "../scylla-parse" }
+arc-swap = "1.5"
+maplit = "1.0"
+chrono = "0.4"
+# App
+overclock = { version = "0.1", default-features = false, optional = true, features = ["backserver"] }
+async-trait = { version = "0.1", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+futures = { version = "0.3", optional = true }
+futures-util = { version = "0.3", optional = true }
+rand = { version = "0.8", optional = true }
+url = { version = "2.2", optional = true }
+num_cpus = { version = "1.13", optional = true }
+dyn-clone = { version = "1.0", optional = true }
+
+[dev-dependencies]
+env_logger = "0.9"
+tokio = { version = "1.18", features = ["macros", "rt-multi-thread", "signal", "net", "io-util"] }
+scylla = "0.4"
+
+[[example]]
+name = "scylla"
+path = "examples/scylla.rs"
+
+[[example]]
+name = "ws_scylla"
+path = "examples/ws_scylla.rs"
+required-features = ["overclock/backserver", "overclock/tungstenite"]
+
+[[example]]
+name = "benchmark"
+path = "examples/benchmark.rs"
+
+[[example]]
+name = "compare"
+path = "examples/compare.rs"
+
+[features]
+default = ["app"]
+app = [
+    "overclock",
+    "overclock/prefabs",
+    "overclock/tungstenite",
+    "async-trait",
+    "serde",
+    "serde_json",
+    "futures",
+    "futures-util",
+    "rand",
+    "url",
+    "num_cpus",
+    "dyn-clone"
+]

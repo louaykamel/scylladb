@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "scylladb",
+    "scylla-macros",
+    "scylla-parse",
+    "scylla-parse-macros"
+]

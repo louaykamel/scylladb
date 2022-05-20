@@ -1,0 +1,21 @@
+[package]
+name = "scylla-rs-macros"
+version = "0.1.0"
+authors = ["Louay kamel"]
+edition = "2021"
+license-file = "LICENSE"
+repository = "https://github.com/louaykamel/scylladb"
+description = "Procedural macros for the scylla-rs driver"
+keywords = ["actor", "scylla", "cassandra", "database", "driver"]
+exclude = [".github/**/*"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"
+scylla-parse = { path = "../scylla-parse" }
+
+[dev-dependencies]
+syn = { version = "1.0", features = ["full"]}
