@@ -1,5 +1,5 @@
 [package]
-name = "scylla-parse"
+name = "scylladb-parse"
 version = "0.1.0"
 authors = ["Louay Kamel"]
 edition = "2021"
@@ -20,7 +20,7 @@ anyhow = "1.0"
 derive_more = "0.99"
 anymap = "0.12"
 quote = "1.0"
-scylla-parse-macros = { path = "../scylla-parse-macros" }
+scylladb-parse-macros = "0.1"
 
 [dev-dependencies]
 maplit = "1.0"

@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use scylla_parse::{
+use scylladb_parse::{
     List,
     Nothing,
     StatementStream,

@@ -21,8 +21,9 @@ thiserror = "1.0"
 num-derive = "0.3"
 num-traits = "0.2"
 md5 = "0.7"
-scylla-rs-macros = { path = "../scylla-macros" }
-scylla-parse = { path = "../scylla-parse" }
+scylladb-parse = "0.1"
+scylladb-macros = "0.1"
+
 arc-swap = "1.5"
 maplit = "1.0"
 chrono = "0.4"
