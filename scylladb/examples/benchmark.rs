@@ -73,7 +73,6 @@ async fn run_benchmark(n: i32) -> anyhow::Result<u128> {
     .get_local()
     .await
     .map_err(|e| anyhow::anyhow!("Could not verify if keyspace was created: {}", e))?;
-
     parse_statement!("DROP TABLE IF EXISTS #.test", keyspace.name())
         .execute()
         .consistency(Consistency::All)
@@ -101,14 +100,7 @@ async fn run_benchmark(n: i32) -> anyhow::Result<u128> {
 
     let start = SystemTime::now();
     for i in 0..n {
-        keyspace
-            .insert(&format!("Key {}", i), &i)
-            .build()?
-            .send_local()
-            .map_err(|e| {
-                error!("{}", e);
-                anyhow::anyhow!(e.to_string())
-            })?;
+        keyspace.insert(&format!("Key {}", i), &i).build()?.send_local()?;
     }
 
     let (sender, mut inbox) = unbounded_channel::<Result<Option<_>, _>>();
@@ -168,9 +160,12 @@ impl ToString for MyKeyspace {
 }
 
 impl Insert<String, i32> for MyKeyspace {
-    type QueryOrPrepared = PreparedStatement;
+    type QueryOrPrepared = QueryStatement;
     fn statement(&self) -> InsertStatement {
-        parse_statement!("INSERT INTO #.test (key, data) VALUES (?, ?)", self.name())
+        parse_statement!(
+            "INSERT INTO #.test (key, data) VALUES (?, ?) IF NOT EXISTS",
+            self.name()
+        )
     }
 
     fn bind_values<T: Binder>(builder: T, key: &String, value: &i32) -> T {

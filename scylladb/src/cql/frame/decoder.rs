@@ -13,9 +13,12 @@ use super::{
     },
 };
 use crate::{
-    cql::compression::{
-        Compression,
-        MyCompression,
+    cql::{
+        compression::{
+            Compression,
+            MyCompression,
+        },
+        rows::AnyIter,
     },
     prelude::Row,
 };
@@ -94,6 +97,25 @@ where
 //        Ok(Some(Self::Row::rows_iter(decoder)?.collect()))
 //    }
 //}
+
+/// LwtDecoder trait to decode the LWT result from scylla
+pub struct LwtDecoder;
+impl LwtDecoder {
+    /// Try to decode the provided Decoder with an expected Void result
+    pub fn try_decode_lwt(decoder: Decoder) -> anyhow::Result<AnyIter> {
+        if decoder.is_error()? {
+            Err(anyhow!(decoder.get_error()?))
+        } else if decoder.is_rows()? {
+            Ok(AnyIter::new(decoder)?)
+        } else {
+            Err(anyhow!("Decoder opcode is {}", decoder.opcode()?))
+        }
+    }
+    /// Decode the provided Decoder with an deterministic Lwt result
+    pub fn decode_lwt(decoder: Decoder) -> AnyIter {
+        Self::try_decode_lwt(decoder).unwrap()
+    }
+}
 
 /// VoidDecoder trait to decode the VOID result from scylla
 pub struct VoidDecoder;
@@ -545,6 +567,12 @@ impl ColumnDecoder for i8 {
 impl ColumnDecoder for u8 {
     fn try_decode_column(slice: &[u8]) -> anyhow::Result<Self> {
         Ok(slice[0])
+    }
+}
+
+impl ColumnDecoder for bool {
+    fn try_decode_column(slice: &[u8]) -> anyhow::Result<Self> {
+        Ok(u8::from_be_bytes(slice.try_into()?) != 0)
     }
 }
 

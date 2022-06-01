@@ -123,6 +123,129 @@ pub trait ColumnValue {
     fn column_value<C: ColumnDecoder>(&mut self) -> anyhow::Result<C>;
 }
 
+#[allow(unused)]
+#[derive(Clone, Debug)]
+/// Column iterator
+pub struct ColumnIter<T> {
+    decoder: super::Decoder,
+    rows_count: usize,
+    column_start: usize,
+    remaining_rows_count: usize,
+    remaining_column_count: usize,
+    metadata: Metadata,
+    _marker: std::marker::PhantomData<T>,
+}
+
+#[allow(unused)]
+#[derive(Clone, Debug)]
+/// AnyIterator to iterator over the column values
+pub struct AnyIter {
+    decoder: super::Decoder,
+    rows_count: usize,
+    column_start: usize,
+    remaining_rows_count: usize,
+    remaining_column_count: usize,
+    metadata: Metadata,
+}
+
+impl AnyIter {
+    /// Iterates the next column value
+    pub fn next<T: ColumnDecoder>(&mut self) -> Option<T> {
+        if self.remaining_rows_count > 0 {
+            if self.remaining_column_count > 0 {
+                self.remaining_column_count -= 1;
+                Some(self.column_value::<T>().unwrap())
+            } else {
+                self.remaining_column_count = self.metadata.columns_count as usize;
+                self.remaining_rows_count -= 1;
+                self.next()
+            }
+        } else {
+            None
+        }
+    }
+    /// Create new iterator
+    pub fn new(decoder: super::Decoder) -> anyhow::Result<Self> {
+        let metadata = decoder.metadata()?;
+        let column_count = metadata.columns_count;
+        let rows_start = metadata.rows_start();
+        let column_start = rows_start + 4;
+        ensure!(decoder.buffer_as_ref().len() >= column_start, "Buffer is too small!");
+        let rows_count = i32::from_be_bytes(decoder.buffer_as_ref()[rows_start..column_start].try_into()?);
+        Ok(Self {
+            decoder,
+            metadata,
+            rows_count: rows_count as usize,
+            remaining_rows_count: rows_count as usize,
+            remaining_column_count: column_count as usize,
+            column_start,
+        })
+    }
+    /// Take the paging state
+    pub fn take_paging_state(&mut self) -> Option<Vec<u8>> {
+        self.metadata.take_paging_state()
+    }
+
+    /// Check if the iterator doesn't have any row
+    pub fn is_empty(&self) -> bool {
+        self.rows_count == 0
+    }
+    /// Get the iterator rows count
+    pub fn rows_count(&self) -> usize {
+        self.rows_count
+    }
+    /// Get the iterator remaining rows count
+    pub fn remaining_rows_count(&self) -> usize {
+        self.remaining_rows_count
+    }
+    /// Check if it has more pages to request
+    pub fn has_more_pages(&self) -> bool {
+        self.metadata.has_more_pages()
+    }
+}
+
+impl<T> ColumnIter<T> {
+    /// Check if the iterator doesn't have any row
+    pub fn is_empty(&self) -> bool {
+        self.rows_count == 0
+    }
+    /// Get the iterator rows count
+    pub fn rows_count(&self) -> usize {
+        self.rows_count
+    }
+    /// Get the iterator remaining rows count
+    pub fn remaining_rows_count(&self) -> usize {
+        self.remaining_rows_count
+    }
+    /// Check if it has more pages to request
+    pub fn has_more_pages(&self) -> bool {
+        self.metadata.has_more_pages()
+    }
+}
+
+impl<T: ColumnDecoder> Rows for ColumnIter<T> {
+    fn new(decoder: super::Decoder) -> anyhow::Result<Self> {
+        let metadata = decoder.metadata()?;
+        let column_count = metadata.columns_count;
+        let rows_start = metadata.rows_start();
+        let column_start = rows_start + 4;
+        ensure!(decoder.buffer_as_ref().len() >= column_start, "Buffer is too small!");
+        let rows_count = i32::from_be_bytes(decoder.buffer_as_ref()[rows_start..column_start].try_into()?);
+        Ok(Self {
+            decoder,
+            metadata,
+            rows_count: rows_count as usize,
+            remaining_rows_count: rows_count as usize,
+            remaining_column_count: column_count as usize,
+            column_start,
+            _marker: std::marker::PhantomData,
+        })
+    }
+    fn take_paging_state(&mut self) -> Option<Vec<u8>> {
+        self.metadata.take_paging_state()
+    }
+}
+
 /// An iterator over the rows of a result-set
 #[allow(unused)]
 #[derive(Clone, Debug)]
@@ -134,6 +257,7 @@ pub struct Iter<T: Row> {
     metadata: Metadata,
     _marker: std::marker::PhantomData<T>,
 }
+
 impl<T: Row> Iter<T> {
     /// Check if the iterator doesn't have any row
     pub fn is_empty(&self) -> bool {
@@ -182,6 +306,70 @@ impl<T: Row> Iterator for Iter<T> {
             T::try_decode_row(self).map_err(|e| error!("{}", e)).ok()
         } else {
             None
+        }
+    }
+}
+
+impl<T: ColumnDecoder> Iterator for ColumnIter<T> {
+    type Item = T;
+    /// Note the row decoder is implemented in this `next` method of HardCodedSpecs.
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        if self.remaining_rows_count > 0 {
+            if self.remaining_column_count > 0 {
+                self.remaining_column_count -= 1;
+                Some(self.column_value::<T>().unwrap())
+            } else {
+                self.remaining_column_count = self.metadata.columns_count as usize;
+                self.remaining_rows_count -= 1;
+                self.next()
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl<T> ColumnValue for ColumnIter<T> {
+    fn column_value<C: ColumnDecoder>(&mut self) -> anyhow::Result<C> {
+        ensure!(
+            self.decoder.buffer_as_ref().len() >= self.column_start + 4,
+            "Buffer is too small!"
+        );
+        let length = i32::from_be_bytes(self.decoder.buffer_as_ref()[self.column_start..][..4].try_into()?);
+        self.column_start += 4; // now it become the column_value start, or next column_start if length < 0
+        if length > 0 {
+            ensure!(
+                self.decoder.buffer_as_ref().len() >= self.column_start + length as usize,
+                "Buffer is too small!"
+            );
+            let col_slice = self.decoder.buffer_as_ref()[self.column_start..][..(length as usize)].into();
+            // update the next column_start to start from next column
+            self.column_start += length as usize;
+            C::try_decode_column(col_slice)
+        } else {
+            C::try_decode_column(&[])
+        }
+    }
+}
+impl ColumnValue for AnyIter {
+    fn column_value<C: ColumnDecoder>(&mut self) -> anyhow::Result<C> {
+        ensure!(
+            self.decoder.buffer_as_ref().len() >= self.column_start + 4,
+            "Buffer is too small!"
+        );
+        let length = i32::from_be_bytes(self.decoder.buffer_as_ref()[self.column_start..][..4].try_into()?);
+        self.column_start += 4; // now it become the column_value start, or next column_start if length < 0
+        if length > 0 {
+            ensure!(
+                self.decoder.buffer_as_ref().len() >= self.column_start + length as usize,
+                "Buffer is too small!"
+            );
+            let col_slice = self.decoder.buffer_as_ref()[self.column_start..][..(length as usize)].into();
+            // update the next column_start to start from next column
+            self.column_start += length as usize;
+            C::try_decode_column(col_slice)
+        } else {
+            C::try_decode_column(&[])
         }
     }
 }

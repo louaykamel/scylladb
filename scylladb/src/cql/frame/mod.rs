@@ -33,6 +33,7 @@ pub use decoder::{
     ColumnDecoder,
     Decoder,
     Frame,
+    LwtDecoder,
     RowsDecoder,
     VoidDecoder,
 };

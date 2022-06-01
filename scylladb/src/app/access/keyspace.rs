@@ -1,5 +1,7 @@
 use crate::cql::{
+    AnyIter,
     Decoder,
+    LwtDecoder,
     RowsDecoder,
     VoidDecoder,
 };
@@ -31,6 +33,10 @@ pub trait Keyspace: Send + Sized + Sync + Clone {
     /// Decode void result
     fn decode_void(decoder: Decoder) -> anyhow::Result<()> {
         VoidDecoder::try_decode_void(decoder)
+    }
+    /// Decode lwt result
+    fn decode_lwt(decoder: Decoder) -> anyhow::Result<AnyIter> {
+        LwtDecoder::try_decode_lwt(decoder)
     }
     /// Decode rows result
     fn decode_rows<V>(decoder: Decoder) -> anyhow::Result<Option<V>>

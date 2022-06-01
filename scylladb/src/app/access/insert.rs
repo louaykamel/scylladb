@@ -602,7 +602,20 @@ impl<'a, S: Insert<K, V>, K: TokenEncoder, V> InsertBuilder<'a, S, K, V, QueryCo
             _marker: self._marker,
         }
     }
-
+    pub fn build_lwt(self) -> anyhow::Result<LwtInsertRequest> {
+        let query = S::bind_values(
+            self.builder.consistency(Consistency::Quorum).bind_values(),
+            &self.key,
+            &self.values,
+        )
+        .build()?;
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
     pub fn build(self) -> anyhow::Result<InsertRequest> {
         let query = S::bind_values(
             self.builder.consistency(Consistency::Quorum).bind_values(),
@@ -610,13 +623,41 @@ impl<'a, S: Insert<K, V>, K: TokenEncoder, V> InsertBuilder<'a, S, K, V, QueryCo
             &self.values,
         )
         .build()?;
-        // create the request
         Ok(CommonRequest {
             token: self.key.token(),
             payload: query.into(),
             statement: self.statement.into(),
         }
         .into())
+    }
+    pub fn build_lwt_or_insert(self) -> anyhow::Result<LwtOrInsertRequest> {
+        let query = S::bind_values(
+            self.builder.consistency(Consistency::Quorum).bind_values(),
+            &self.key,
+            &self.values,
+        )
+        .build()?;
+        if self.statement.if_not_exists {
+            // create the request
+            Ok(LwtOrInsertRequest::Lwt(
+                CommonRequest {
+                    token: self.key.token(),
+                    payload: query.into(),
+                    statement: self.statement.into(),
+                }
+                .into(),
+            ))
+        } else {
+            // create the request
+            Ok(LwtOrInsertRequest::Insert(
+                CommonRequest {
+                    token: self.key.token(),
+                    payload: query.into(),
+                    statement: self.statement.into(),
+                }
+                .into(),
+            ))
+        }
     }
 }
 
@@ -849,6 +890,15 @@ impl<'a, S, K: TokenEncoder + ?Sized, V: ?Sized, T> InsertBuilder<'a, S, K, V, Q
     }
 }
 
+/// A request to lwt/insert a record which can be sent to the ring
+#[derive(Debug, Clone)]
+pub enum LwtOrInsertRequest {
+    /// Regular Insert request
+    Insert(InsertRequest),
+    /// Insert request with IF NOT EXISTS (LWT)
+    Lwt(LwtInsertRequest),
+}
+
 /// A request to insert a record which can be sent to the ring
 #[derive(Debug, Clone)]
 pub struct InsertRequest(CommonRequest);
@@ -898,6 +948,63 @@ impl Request for InsertRequest {
 
 impl SendRequestExt for InsertRequest {
     type Marker = DecodeVoid;
+    type Worker = BasicRetryWorker<Self>;
+    const TYPE: RequestType = RequestType::Insert;
+
+    fn worker(self) -> Box<Self::Worker> {
+        BasicRetryWorker::new(self)
+    }
+}
+
+/// A request to Lwt insert a record which can be sent to the ring
+#[derive(Debug, Clone)]
+pub struct LwtInsertRequest(CommonRequest);
+
+impl From<CommonRequest> for LwtInsertRequest {
+    fn from(req: CommonRequest) -> Self {
+        LwtInsertRequest(req)
+    }
+}
+
+impl From<LwtInsertRequest> for CommonRequest {
+    fn from(req: LwtInsertRequest) -> Self {
+        req.0
+    }
+}
+
+impl Deref for LwtInsertRequest {
+    type Target = CommonRequest;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for LwtInsertRequest {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Request for LwtInsertRequest {
+    fn token(&self) -> i64 {
+        self.0.token()
+    }
+
+    fn statement(&self) -> Statement {
+        self.0.statement()
+    }
+
+    fn payload(&self) -> Vec<u8> {
+        self.0.payload()
+    }
+    fn keyspace(&self) -> Option<String> {
+        self.0.keyspace()
+    }
+}
+
+impl SendRequestExt for LwtInsertRequest {
+    type Marker = DecodeLwt;
     type Worker = BasicRetryWorker<Self>;
     const TYPE: RequestType = RequestType::Insert;
 

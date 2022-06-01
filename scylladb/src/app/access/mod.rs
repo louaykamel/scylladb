@@ -39,10 +39,12 @@ pub use crate::{
     },
     cql::{
         query::StatementType,
+        AnyIter,
         Bindable,
         Binder,
         Consistency,
         Decoder,
+        LwtDecoder,
         PreparedStatement,
         Query,
         QueryBuild,
@@ -85,6 +87,7 @@ pub use insert::{
     GetStaticInsertRequest,
     Insert,
     InsertRequest,
+    LwtOrInsertRequest,
 };
 pub use keyspace::Keyspace;
 pub use prepare::{
@@ -479,6 +482,44 @@ impl DecodeVoid {
     }
 }
 
+impl Marker for DecodeVoid {
+    type Output = ();
+
+    fn new() -> Self {
+        Self
+    }
+
+    fn internal_try_decode(d: Decoder) -> anyhow::Result<Self::Output> {
+        VoidDecoder::try_decode_void(d)
+    }
+}
+
+/// A marker struct which holds the keyspace type
+/// so that it may be decoded (checked for errors)
+/// via `LwtDecoder` later
+#[derive(Copy, Clone)]
+pub struct DecodeLwt;
+
+impl DecodeLwt {
+    /// Decode a result payload using the `LwtDecoder` impl
+    #[inline]
+    pub fn decode(&self, bytes: Vec<u8>) -> anyhow::Result<AnyIter> {
+        LwtDecoder::try_decode_lwt(bytes.try_into()?)
+    }
+}
+
+impl Marker for DecodeLwt {
+    type Output = AnyIter;
+
+    fn new() -> Self {
+        Self
+    }
+
+    fn internal_try_decode(d: Decoder) -> anyhow::Result<Self::Output> {
+        LwtDecoder::try_decode_lwt(d)
+    }
+}
+
 /// A marker returned by a request to allow for later decoding of the response
 pub trait Marker {
     /// The marker's output
@@ -505,18 +546,6 @@ impl<T: RowsDecoder + Send> Marker for DecodeRows<T> {
 
     fn internal_try_decode(d: Decoder) -> anyhow::Result<Self::Output> {
         T::try_decode_rows(d)
-    }
-}
-
-impl Marker for DecodeVoid {
-    type Output = ();
-
-    fn new() -> Self {
-        Self
-    }
-
-    fn internal_try_decode(d: Decoder) -> anyhow::Result<Self::Output> {
-        VoidDecoder::try_decode_void(d)
     }
 }
 
@@ -729,7 +758,6 @@ mod tests {
                 &[&8.0, &"hello"],
                 StatementType::Query,
             )
-            //.bind_values(|binder, keys, values| binder.bind(keys).bind(values))
             .build()
             .unwrap()
             .get_local_blocking()

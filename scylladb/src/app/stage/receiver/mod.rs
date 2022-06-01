@@ -114,10 +114,8 @@ impl Receiver {
                 .as_mut_payload()
                 .ok_or_else(|| anyhow!("No payload for stream {}!", self.stream_id))?;
             // resize payload only if total_length is larger than the payload length
-            if self.total_length > payload.len() {
-                // resize the len of the payload.
-                payload.resize(self.total_length, 0);
-            }
+            // resize the len of the payload.
+            payload.resize(self.total_length, 0);
             // set header to true
             self.header = true;
         }
