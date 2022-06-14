@@ -494,6 +494,14 @@ impl Frame for Decoder {
 
 /// The column decoder trait to decode the frame.
 pub trait ColumnDecoder {
+    /// Decode the column value, include encoded length
+    fn try_decode(slice: &[u8]) -> anyhow::Result<Self>
+    where
+        Self: Sized,
+    {
+        let len = i32::from_be_bytes(slice[..4].try_into()?) as usize;
+        Self::try_decode_column(&slice[4..len])
+    }
     /// Decode the column.
     fn try_decode_column(slice: &[u8]) -> anyhow::Result<Self>
     where

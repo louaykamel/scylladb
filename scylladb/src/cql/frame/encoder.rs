@@ -63,9 +63,16 @@ impl ColumnEncodeChain {
 
 /// The frame column encoder.
 pub trait ColumnEncoder {
-    /// Encoder the column buffer.
-    fn encode(&self, buffer: &mut Vec<u8>);
-
+    /// Encode the column without its length
+    fn encode_column(&self, buffer: &mut Vec<u8>);
+    /// Encoder the column buffer, which starts with be length
+    fn encode(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&BE_0_BYTES_LEN);
+        let p = buffer.len();
+        self.encode_column(buffer);
+        let byte_size = buffer.len() - p;
+        buffer[p - 4..p].copy_from_slice(&i32::to_be_bytes(byte_size as i32));
+    }
     /// Encode this value to a new buffer
     fn encode_new(&self) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -91,12 +98,18 @@ pub trait ColumnEncoder {
 }
 
 impl<T: ColumnEncoder + ?Sized> ColumnEncoder for &T {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        T::encode_column(*self, buffer)
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         T::encode(*self, buffer)
     }
 }
 
 impl<T: ColumnEncoder + ?Sized> ColumnEncoder for Box<T> {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        T::encode_column(&*self, buffer)
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         T::encode(&*self, buffer)
     }
@@ -106,6 +119,12 @@ impl<T> ColumnEncoder for Option<T>
 where
     T: ColumnEncoder,
 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        match self {
+            Some(value) => value.encode(buffer),
+            None => ColumnEncoder::encode(&UNSET_VALUE, buffer),
+        }
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         match self {
             Some(value) => value.encode(buffer),
@@ -115,102 +134,154 @@ where
 }
 
 impl ColumnEncoder for i64 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i64::to_be_bytes(*self));
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_8_BYTES_LEN);
-        buffer.extend(&i64::to_be_bytes(*self));
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for u64 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&u64::to_be_bytes(*self));
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_8_BYTES_LEN);
-        buffer.extend(&u64::to_be_bytes(*self));
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for f64 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&f64::to_be_bytes(*self));
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_8_BYTES_LEN);
-        buffer.extend(&f64::to_be_bytes(*self));
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for i32 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i32::to_be_bytes(*self));
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_4_BYTES_LEN);
-        buffer.extend(&i32::to_be_bytes(*self));
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for u32 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&u32::to_be_bytes(*self));
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_4_BYTES_LEN);
-        buffer.extend(&u32::to_be_bytes(*self));
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for f32 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&f32::to_be_bytes(*self));
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_4_BYTES_LEN);
-        buffer.extend(&f32::to_be_bytes(*self));
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for i16 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i16::to_be_bytes(*self));
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_2_BYTES_LEN);
-        buffer.extend(&i16::to_be_bytes(*self));
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for u16 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&u16::to_be_bytes(*self));
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_2_BYTES_LEN);
-        buffer.extend(&u16::to_be_bytes(*self));
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for i8 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i8::to_be_bytes(*self));
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_1_BYTES_LEN);
-        buffer.extend(&i8::to_be_bytes(*self));
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for u8 {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.push(*self);
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_1_BYTES_LEN);
-        buffer.push(*self);
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for bool {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.push(*self as u8);
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_1_BYTES_LEN);
-        buffer.push(*self as u8);
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for String {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(self.bytes());
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&i32::to_be_bytes(self.len() as i32));
-        buffer.extend(self.bytes());
+        self.encode_column(buffer);
     }
 }
 impl ColumnEncoder for str {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(self.bytes());
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&i32::to_be_bytes(self.len() as i32));
-        buffer.extend(self.bytes());
+        self.encode_column(buffer);
     }
 }
 impl ColumnEncoder for &[u8] {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(*self);
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&i32::to_be_bytes(self.len() as i32));
-        buffer.extend(*self);
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for IpAddr {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        match *self {
+            IpAddr::V4(ip) => {
+                buffer.extend(&ip.octets());
+            }
+            IpAddr::V6(ip) => {
+                buffer.extend(&ip.octets());
+            }
+        }
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         match *self {
             IpAddr::V4(ip) => {
@@ -226,20 +297,29 @@ impl ColumnEncoder for IpAddr {
 }
 
 impl ColumnEncoder for Ipv4Addr {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&self.octets());
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_4_BYTES_LEN);
-        buffer.extend(&self.octets());
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for Ipv6Addr {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&self.octets());
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_16_BYTES_LEN);
-        buffer.extend(&self.octets());
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for Cursor<Vec<u8>> {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(self.get_ref());
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         let inner = self.get_ref();
         buffer.extend(&i32::to_be_bytes(inner.len() as i32));
@@ -251,19 +331,11 @@ impl<E> ColumnEncoder for Vec<E>
 where
     E: ColumnEncoder,
 {
-    fn encode(&self, buffer: &mut Vec<u8>) {
-        // total byte_size of the list is unknown,
-        // therefore we pad zero length for now.
-        buffer.extend(&BE_0_BYTES_LEN);
-        // in order to compute the byte_size we snapshot
-        // the current buffer length in advance
-        let current_length = buffer.len();
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&i32::to_be_bytes(self.len() as i32));
         for e in self {
             e.encode(buffer);
         }
-        let list_byte_size = buffer.len() - current_length;
-        buffer[(current_length - 4)..current_length].copy_from_slice(&i32::to_be_bytes(list_byte_size as i32));
     }
 }
 
@@ -272,55 +344,66 @@ where
     K: ColumnEncoder,
     V: ColumnEncoder,
 {
-    fn encode(&self, buffer: &mut Vec<u8>) {
-        buffer.extend(&BE_0_BYTES_LEN);
-        let current_length = buffer.len();
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&i32::to_be_bytes(self.len() as i32));
         for (k, v) in self {
             k.encode(buffer);
             v.encode(buffer);
         }
-        let map_byte_size = buffer.len() - current_length;
-        buffer[(current_length - 4)..current_length].copy_from_slice(&i32::to_be_bytes(map_byte_size as i32));
     }
 }
 
 impl ColumnEncoder for Unset {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&BE_UNSET_BYTES_LEN);
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_UNSET_BYTES_LEN);
     }
 }
 
 impl ColumnEncoder for Null {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&BE_NULL_BYTES_LEN);
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_NULL_BYTES_LEN);
     }
 }
 
 impl ColumnEncoder for NaiveDate {
-    fn encode(&self, buffer: &mut Vec<u8>) {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
         let days = self.num_days_from_ce() as u32 - 719_163 + (1u32 << 31);
-        buffer.extend(&BE_4_BYTES_LEN);
         buffer.extend(&u32::to_be_bytes(days))
+    }
+    fn encode(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&BE_4_BYTES_LEN);
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for NaiveTime {
-    fn encode(&self, buffer: &mut Vec<u8>) {
-        let nanos = self.hour() as u64 * 3_600_000_000_000
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        let nanos: u64 = self.hour() as u64 * 3_600_000_000_000
             + self.minute() as u64 * 60_000_000_000
             + self.second() as u64 * 1_000_000_000
             + self.nanosecond() as u64;
+        nanos.encode_column(buffer);
+    }
+    fn encode(&self, buffer: &mut Vec<u8>) {
         buffer.extend(&BE_8_BYTES_LEN);
-        buffer.extend(&u64::to_be_bytes(nanos as u64))
+        self.encode_column(buffer);
     }
 }
 
 impl ColumnEncoder for NaiveDateTime {
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        let cql_timestamp = self.timestamp_millis() as u64;
+        cql_timestamp.encode_column(buffer);
+    }
     fn encode(&self, buffer: &mut Vec<u8>) {
-        let cql_timestamp = self.timestamp_millis();
         buffer.extend(&BE_8_BYTES_LEN);
-        buffer.extend(&u64::to_be_bytes(cql_timestamp as u64))
+        self.encode_column(buffer)
     }
 }
 
