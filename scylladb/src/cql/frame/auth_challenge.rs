@@ -5,7 +5,6 @@ use std::convert::TryFrom;
 use super::decoder::{
     bytes,
     Decoder,
-    Frame,
 };
 
 /// The Autentication Challenge structure with the token field.
@@ -16,15 +15,17 @@ pub(crate) struct AuthChallenge {
 
 impl AuthChallenge {
     /// Create a new `AuthChallenge ` from the body of frame.
-    pub(crate) fn new(decoder: &Decoder) -> anyhow::Result<Self> {
-        Self::try_from(decoder.body()?)
+    pub(crate) fn new(decoder: &mut Decoder) -> anyhow::Result<Self> {
+        Self::try_from(decoder)
     }
 }
 
-impl TryFrom<&[u8]> for AuthChallenge {
+impl TryFrom<&mut Decoder> for AuthChallenge {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self { token: bytes(slice)? })
+    fn try_from(decoder: &mut Decoder) -> Result<Self, Self::Error> {
+        Ok(Self {
+            token: bytes(decoder.reader())?,
+        })
     }
 }

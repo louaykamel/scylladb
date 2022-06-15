@@ -144,15 +144,15 @@ impl<Auth: Authenticator> CqlBuilder<Auth> {
         let buffer = collect_frame_response(&mut stream).await?;
         // Create Decoder from buffer. OPTIONS cannot be compressed as
         // the client and protocol didn't yet settle on compression algo (if any)
-        let decoder = Decoder::new(buffer, UNCOMPRESSED)?;
+        let mut decoder = Decoder::new(buffer, UNCOMPRESSED)?;
         // make sure the frame response is not error
-        if decoder.is_error()? {
+        if decoder.is_error() {
             // check if response is_error.
             bail!("CQL connection not supported due to CqlError: {}", decoder.get_error()?);
         }
-        ensure!(decoder.is_supported()?, "CQL connection not supported!");
+        ensure!(decoder.is_supported(), "CQL connection not supported!");
         // decode supported options from decoder
-        let supported = Supported::new(&decoder)?;
+        let supported = Supported::new(&mut decoder)?;
         // create empty hashmap options;
         let mut options: HashMap<String, String> = HashMap::new();
         // get the supported_cql_version option;
@@ -174,10 +174,10 @@ impl<Auth: Authenticator> CqlBuilder<Auth> {
         stream.write_all(&startup_buf).await?;
         let buffer = collect_frame_response(&mut stream).await?;
         // Create Decoder from buffer.
-        let decoder = Decoder::new(buffer, MyCompression::get())?;
-        if decoder.is_authenticate()? {
+        let mut decoder = Decoder::new(buffer, MyCompression::get())?;
+        if decoder.is_authenticate() {
             if self.authenticator.is_none() {
-                Authenticate::new(&decoder)?;
+                Authenticate::new(&mut decoder)?;
                 bail!("CQL connection not ready due to authenticator is not provided");
             }
             let auth_response = AuthResponse::new()
@@ -192,19 +192,19 @@ impl<Auth: Authenticator> CqlBuilder<Auth> {
             // collect_frame_response
             let buffer = collect_frame_response(&mut stream).await?;
             // Create Decoder from buffer.
-            let decoder = Decoder::new(buffer, MyCompression::get())?;
-            if decoder.is_error()? {
+            let mut decoder = Decoder::new(buffer, MyCompression::get())?;
+            if decoder.is_error() {
                 bail!("CQL connection not ready due to CqlError: {}", decoder.get_error()?);
             }
-            if decoder.is_auth_challenge()? {
-                AuthChallenge::new(&decoder)?;
+            if decoder.is_auth_challenge() {
+                AuthChallenge::new(&mut decoder)?;
                 bail!("CQL connection not ready due to Unsupported Auth Challenge");
             }
-            ensure!(decoder.is_auth_success()?, "Authorization unsuccessful!");
-        } else if decoder.is_error()? {
+            ensure!(decoder.is_auth_success(), "Authorization unsuccessful!");
+        } else if decoder.is_error() {
             bail!("CQL connection not ready due to CqlError: {}", decoder.get_error()?);
         } else {
-            ensure!(decoder.is_ready()?, "Decoder is not ready!");
+            ensure!(decoder.is_ready(), "Decoder is not ready!");
         }
         // copy usefull options
         let shard: u16 = supported
@@ -387,7 +387,7 @@ impl Cql {
         // Create Decoder from buffer.
         let decoder = Decoder::new(buffer, MyCompression::get())?;
 
-        if decoder.is_rows()? {
+        if decoder.is_rows() {
             let Row { data_center, tokens } = Info::new(decoder)?.next().ok_or(anyhow!("No info found!"))?;
             self.dc.replace(data_center);
             self.tokens.replace(

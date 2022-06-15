@@ -3,7 +3,6 @@
 use super::decoder::{
     string_multimap,
     Decoder,
-    Frame,
 };
 use std::collections::HashMap;
 
@@ -14,8 +13,8 @@ pub struct Supported {
 
 impl Supported {
     /// Create a Supported frame from frame decoder.
-    pub fn new(decoder: &Decoder) -> anyhow::Result<Self> {
-        let options = string_multimap(decoder.body()?)?;
+    pub fn new(decoder: &mut Decoder) -> anyhow::Result<Self> {
+        let options = string_multimap(decoder.reader())?;
         Ok(Self { options })
     }
     /// Get the options in the Supported frame.

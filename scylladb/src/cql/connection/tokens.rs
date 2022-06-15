@@ -10,7 +10,6 @@ use crate::{
     },
     rows,
 };
-use std::convert::TryInto;
 
 rows!(
     rows: Info,

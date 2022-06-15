@@ -146,7 +146,7 @@ impl Reporter {
             if let Some(payload) = payloads[stream as usize].as_mut().take() {
                 if is_cql_error(&payload) {
                     let error = Decoder::try_from(payload)
-                        .and_then(|decoder| CqlError::new(&decoder).map(|e| WorkerError::Cql(e)))
+                        .and_then(|mut decoder| CqlError::new(&mut decoder).map(|e| WorkerError::Cql(e)))
                         .unwrap_or_else(|e| WorkerError::Other(e));
                     worker.handle_error(error, Some(handle))?;
                 } else {

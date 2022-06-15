@@ -4,6 +4,7 @@ use super::{
     consistency::Consistency,
     decoder::{
         self,
+        ColumnDecoder,
         Decoder,
         Frame,
     },
@@ -12,15 +13,13 @@ use anyhow::{
     bail,
     ensure,
 };
-// use num_derive::FromPrimitive;
-// use num_traits::FromPrimitive;
-use std::convert::{
-    TryFrom,
-    TryInto,
+use std::{
+    convert::TryFrom,
+    io::Cursor,
 };
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 #[error("{message}")]
 /// The CQL error structure.
 pub struct CqlError {
@@ -34,58 +33,48 @@ pub struct CqlError {
 
 impl CqlError {
     /// Get the CQL error from the frame decoder.
-    pub fn new(decoder: &Decoder) -> anyhow::Result<CqlError> {
-        Self::try_from(decoder.body()?)
+    pub fn new(decoder: &mut Decoder) -> anyhow::Result<CqlError> {
+        Self::try_from(decoder)
     }
 }
 
-impl TryFrom<&[u8]> for CqlError {
+impl TryFrom<&mut Decoder> for CqlError {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        let code = ErrorCodes::try_from(slice)?;
-        let message = decoder::string(&slice[4..])?;
+    fn try_from(decoder: &mut Decoder) -> Result<Self, Self::Error> {
+        ensure!(decoder.is_error());
+        let body_kind = decoder.header_flags().body_kind();
+        let code = unsafe { std::mem::transmute(body_kind) };
+        let message = decoder::string(decoder.reader())?;
         let additional: Option<Additional>;
         match code {
             ErrorCodes::UnavailableException => {
                 additional = Some(Additional::UnavailableException(UnavailableException::try_from(
-                    &slice[(6 + message.len()..)],
+                    decoder.reader(),
                 )?))
             }
             ErrorCodes::WriteTimeout => {
-                additional = Some(Additional::WriteTimeout(WriteTimeout::try_from(
-                    &slice[(6 + message.len()..)],
-                )?))
+                additional = Some(Additional::WriteTimeout(WriteTimeout::try_from(decoder.reader())?))
             }
             ErrorCodes::ReadTimeout => {
-                additional = Some(Additional::ReadTimeout(ReadTimeout::try_from(
-                    &slice[(6 + message.len()..)],
-                )?))
+                additional = Some(Additional::ReadTimeout(ReadTimeout::try_from(decoder.reader())?))
             }
             ErrorCodes::ReadFailure => {
-                additional = Some(Additional::ReadFailure(ReadFailure::try_from(
-                    &slice[(6 + message.len()..)],
-                )?))
+                additional = Some(Additional::ReadFailure(ReadFailure::try_from(decoder.reader())?))
             }
             ErrorCodes::FunctionFailure => {
                 additional = Some(Additional::FunctionFailure(FunctionFailure::try_from(
-                    &slice[(6 + message.len()..)],
+                    decoder.reader(),
                 )?))
             }
             ErrorCodes::WriteFailure => {
-                additional = Some(Additional::WriteFailure(WriteFailure::try_from(
-                    &slice[(6 + message.len()..)],
-                )?))
+                additional = Some(Additional::WriteFailure(WriteFailure::try_from(decoder.reader())?))
             }
             ErrorCodes::AlreadyExists => {
-                additional = Some(Additional::AlreadyExists(AlreadyExists::try_from(
-                    &slice[(6 + message.len()..)],
-                )?))
+                additional = Some(Additional::AlreadyExists(AlreadyExists::try_from(decoder.reader())?))
             }
             ErrorCodes::Unprepared => {
-                additional = Some(Additional::Unprepared(Unprepared::try_from(
-                    &slice[(6 + message.len()..)],
-                )?))
+                additional = Some(Additional::Unprepared(Unprepared::try_from(decoder.reader())?))
             }
             _ => {
                 additional = None;
@@ -148,7 +137,7 @@ pub const ALREADY_EXISTS: i32 = 0x2400;
 /// The Error code of `UNPREPARED`.
 pub const UNPREPARED: i32 = 0x2500;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(i32)]
 /// The Error code enum.
 pub enum ErrorCodes {
@@ -190,7 +179,7 @@ pub enum ErrorCodes {
     Unprepared = 0x2500,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The additional error information enum.
 pub enum Additional {
     /// The additional error information is `UnavailableException`.
@@ -210,7 +199,7 @@ pub enum Additional {
     /// The additional error information is `Unprepared`.
     Unprepared(Unprepared),
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The unavailable exception structure.
 pub struct UnavailableException {
     /// The consistency level.
@@ -220,17 +209,17 @@ pub struct UnavailableException {
     /// The number of replicas that were known to be alive when the request had been processed.
     pub alive: i32,
 }
-impl TryFrom<&[u8]> for UnavailableException {
+impl TryFrom<&mut Cursor<Vec<u8>>> for UnavailableException {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        let cl = Consistency::try_from(slice)?;
-        let required = i32::from_be_bytes(slice[2..6].try_into()?);
-        let alive = i32::from_be_bytes(slice[6..10].try_into()?);
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        let cl = Consistency::try_from(u16::try_decode_column(reader)?)?;
+        let required = i32::try_decode_column(reader)?;
+        let alive = i32::try_decode_column(reader)?;
         Ok(Self { cl, required, alive })
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The addtional error information, `WriteTimeout`, stucture.
 pub struct WriteTimeout {
     /// The consistency level of the query having triggered the exception.
@@ -242,14 +231,14 @@ pub struct WriteTimeout {
     /// That describe the type of the write that timed out.
     pub writetype: WriteType,
 }
-impl TryFrom<&[u8]> for WriteTimeout {
+impl TryFrom<&mut Cursor<Vec<u8>>> for WriteTimeout {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        let cl = Consistency::try_from(slice)?;
-        let received = i32::from_be_bytes(slice[2..6].try_into()?);
-        let blockfor = i32::from_be_bytes(slice[6..10].try_into()?);
-        let writetype = WriteType::try_from(&slice[10..])?;
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        let cl = Consistency::try_from(u16::try_decode_column(reader)?)?;
+        let received = i32::try_decode_column(reader)?;
+        let blockfor = i32::try_decode_column(reader)?;
+        let writetype = WriteType::try_from(reader)?;
         Ok(Self {
             cl,
             received,
@@ -258,7 +247,7 @@ impl TryFrom<&[u8]> for WriteTimeout {
         })
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The addtional error information, `ReadTimeout`, stucture.
 pub struct ReadTimeout {
     /// The consistency level of the query having triggered the exception.
@@ -277,14 +266,14 @@ impl ReadTimeout {
         self.data_present == 0
     }
 }
-impl TryFrom<&[u8]> for ReadTimeout {
+impl TryFrom<&mut Cursor<Vec<u8>>> for ReadTimeout {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        let cl = Consistency::try_from(slice)?;
-        let received = i32::from_be_bytes(slice[2..6].try_into()?);
-        let blockfor = i32::from_be_bytes(slice[6..10].try_into()?);
-        let data_present = slice[10];
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        let cl = Consistency::try_from(u16::try_decode_column(reader)?)?;
+        let received = i32::try_decode_column(reader)?;
+        let blockfor = i32::try_decode_column(reader)?;
+        let data_present = u8::try_decode_column(reader)?;
         Ok(Self {
             cl,
             received,
@@ -293,7 +282,7 @@ impl TryFrom<&[u8]> for ReadTimeout {
         })
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The addtional error information, `ReadFailure`, stucture.
 pub struct ReadFailure {
     /// The consistency level of the query having triggered the exception.
@@ -315,15 +304,15 @@ impl ReadFailure {
         self.data_present == 0
     }
 }
-impl TryFrom<&[u8]> for ReadFailure {
+impl TryFrom<&mut Cursor<Vec<u8>>> for ReadFailure {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        let cl = Consistency::try_from(slice)?;
-        let received = i32::from_be_bytes(slice[2..6].try_into()?);
-        let blockfor = i32::from_be_bytes(slice[6..10].try_into()?);
-        let num_failures = i32::from_be_bytes(slice[10..14].try_into()?);
-        let data_present = slice[14];
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        let cl = Consistency::try_from(u16::try_decode_column(reader)?)?;
+        let received = i32::try_decode_column(reader)?;
+        let blockfor = i32::try_decode_column(reader)?;
+        let num_failures = i32::try_decode_column(reader)?;
+        let data_present = u8::try_decode_column(reader)?;
         Ok(Self {
             cl,
             received,
@@ -333,7 +322,7 @@ impl TryFrom<&[u8]> for ReadFailure {
         })
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The addtional error information, `FunctionFailure`, stucture.
 pub struct FunctionFailure {
     /// The keyspace of the failed function.
@@ -344,13 +333,13 @@ pub struct FunctionFailure {
     pub arg_types: Vec<String>,
 }
 
-impl TryFrom<&[u8]> for FunctionFailure {
+impl TryFrom<&mut Cursor<Vec<u8>>> for FunctionFailure {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        let keyspace = decoder::string(slice)?;
-        let function = decoder::string(&slice[2 + keyspace.len()..])?;
-        let arg_types = decoder::string_list(&slice[4 + keyspace.len() + function.len()..])?;
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        let keyspace = decoder::string(reader)?;
+        let function = decoder::string(reader)?;
+        let arg_types = decoder::string_list(reader)?;
         Ok(Self {
             keyspace,
             function,
@@ -358,7 +347,7 @@ impl TryFrom<&[u8]> for FunctionFailure {
         })
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The addtional error information, `WriteFailure`, stucture.
 pub struct WriteFailure {
     /// The consistency level of the query having triggered the exception.
@@ -373,15 +362,15 @@ pub struct WriteFailure {
     pub writetype: WriteType,
 }
 
-impl TryFrom<&[u8]> for WriteFailure {
+impl TryFrom<&mut Cursor<Vec<u8>>> for WriteFailure {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        let cl = Consistency::try_from(slice)?;
-        let received = i32::from_be_bytes(slice[2..6].try_into()?);
-        let blockfor = i32::from_be_bytes(slice[6..10].try_into()?);
-        let num_failures = i32::from_be_bytes(slice[10..14].try_into()?);
-        let writetype = WriteType::try_from(&slice[14..])?;
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        let cl = Consistency::try_from(u16::try_decode_column(reader)?)?;
+        let received = i32::try_decode_column(reader)?;
+        let blockfor = i32::try_decode_column(reader)?;
+        let num_failures = i32::try_decode_column(reader)?;
+        let writetype = WriteType::try_from(reader)?;
         Ok(Self {
             cl,
             received,
@@ -391,7 +380,7 @@ impl TryFrom<&[u8]> for WriteFailure {
         })
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The addtional error information, `AlreadyExists`, stucture.
 pub struct AlreadyExists {
     /// Representing either the keyspace that already exists, or the keyspace in which the table that
@@ -402,32 +391,32 @@ pub struct AlreadyExists {
     pub table: String,
 }
 
-impl TryFrom<&[u8]> for AlreadyExists {
+impl TryFrom<&mut Cursor<Vec<u8>>> for AlreadyExists {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        let ks = decoder::string(slice)?;
-        let table = decoder::string(slice[2 + ks.len()..].try_into()?)?;
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        let ks = decoder::string(reader)?;
+        let table = decoder::string(reader)?;
         Ok(Self { ks, table })
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The addtional error information, `Unprepared`, stucture.
 pub struct Unprepared {
     /// The unprepared id.
     pub id: [u8; 16],
 }
 
-impl TryFrom<&[u8]> for Unprepared {
+impl TryFrom<&mut Cursor<Vec<u8>>> for Unprepared {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
         Ok(Self {
-            id: decoder::prepared_id(slice)?,
+            id: decoder::prepared_id(reader)?,
         })
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The type of the write that timed out.
 pub enum WriteType {
     /// Simple write type.
@@ -448,11 +437,11 @@ pub enum WriteType {
     Cdc,
 }
 
-impl TryFrom<&[u8]> for WriteType {
+impl TryFrom<&mut Cursor<Vec<u8>>> for WriteType {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        Ok(match decoder::str(slice)? {
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        Ok(match &decoder::string(reader)?[..] {
             "SIMPLE" => WriteType::Simple,
             "BATCH" => WriteType::Batch,
             "UNLOGGED_BATCH" => WriteType::UnloggedBatch,
@@ -466,13 +455,11 @@ impl TryFrom<&[u8]> for WriteType {
     }
 }
 
-impl TryFrom<&[u8]> for ErrorCodes {
+impl TryFrom<&mut Cursor<Vec<u8>>> for ErrorCodes {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        ensure!(slice.len() >= 4, "Buffer is too small!");
-        let code = i32::from_be_bytes(slice[0..4].try_into()?);
-        // ErrorCodes::from_i32(code).ok_or(anyhow!("No error code found for {}", code))
+    fn try_from(reader: &mut Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        let code = i32::try_decode_column(reader)?;
         unsafe { Ok(std::mem::transmute(code)) }
     }
 }

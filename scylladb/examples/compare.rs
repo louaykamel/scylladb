@@ -41,7 +41,7 @@ async fn main() {
         match run_benchmark_scylla_rs(*n).await {
             Ok(time) => {
                 *t = time;
-                info!("Successfully ran scylla-rs benchmark for {} queries", *n * 2);
+                info!("Successfully ran scylladb benchmark for {} queries", *n * 2);
             }
             Err(e) => error!("{}", e),
         }

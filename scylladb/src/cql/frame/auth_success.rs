@@ -3,7 +3,6 @@
 use super::decoder::{
     bytes,
     Decoder,
-    Frame,
 };
 use std::convert::TryFrom;
 
@@ -14,8 +13,8 @@ pub struct AuthSuccess {
 
 impl AuthSuccess {
     /// Create a new `AuthSuccess` structure from frame decoder.
-    pub fn new(decoder: &Decoder) -> anyhow::Result<Self> {
-        Self::try_from(decoder.body()?)
+    pub fn new(decoder: &mut Decoder) -> anyhow::Result<Self> {
+        Self::try_from(decoder)
     }
     /// Get the autentication token.
     pub fn token(&self) -> Option<&Vec<u8>> {
@@ -23,10 +22,12 @@ impl AuthSuccess {
     }
 }
 
-impl TryFrom<&[u8]> for AuthSuccess {
+impl TryFrom<&mut Decoder> for AuthSuccess {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self { token: bytes(slice)? })
+    fn try_from(decoder: &mut Decoder) -> Result<Self, Self::Error> {
+        Ok(Self {
+            token: bytes(decoder.reader())?,
+        })
     }
 }

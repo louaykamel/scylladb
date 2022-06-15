@@ -15,8 +15,8 @@ pub struct Authenticate {
 
 impl Authenticate {
     /// Create a new autenticator from the frame decoder.
-    pub fn new(decoder: &Decoder) -> anyhow::Result<Self> {
-        Self::try_from(decoder.body()?)
+    pub fn new(decoder: &mut Decoder) -> anyhow::Result<Self> {
+        Self::try_from(decoder)
     }
     /// Get the autenticator name.
     #[allow(unused)]
@@ -25,12 +25,13 @@ impl Authenticate {
     }
 }
 
-impl TryFrom<&[u8]> for Authenticate {
+impl TryFrom<&mut Decoder> for Authenticate {
     type Error = anyhow::Error;
 
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(decoder: &mut Decoder) -> Result<Self, Self::Error> {
+        anyhow::ensure!(decoder.is_authenticate());
         Ok(Self {
-            authenticator: string(slice)?,
+            authenticator: string(decoder.reader())?,
         })
     }
 }
