@@ -87,18 +87,6 @@ where
     }
 }
 
-// impl<T> RowsDecoder for Vec<T>
-// where
-//    T: ColumnDecoder + Row,
-//{
-//    type Row = T;
-//
-//    fn try_decode_rows(decoder: Decoder) -> anyhow::Result<Option<Self>> {
-//        ensure!(decoder.is_rows()?, "Decoded response is not rows!");
-//        Ok(Some(Self::Row::rows_iter(decoder)?.collect()))
-//    }
-//}
-
 /// LwtDecoder trait to decode the LWT result from scylla
 pub struct LwtDecoder;
 impl LwtDecoder {
@@ -301,7 +289,6 @@ impl Header {
             tracing = None;
         }
         let warnings = if flags & header::WARNING == header::WARNING {
-            u16::try_decode_column(reader)?;
             let string_list = string_list(reader)?;
             Some(string_list)
         } else {
@@ -363,7 +350,7 @@ impl Frame for Decoder {
         &self.header_flags
     }
     fn stream(&self) -> i16 {
-        todo!()
+        ((self.header.buffer[2] as i16) << 8) | self.header.buffer[3] as i16
     }
     fn opcode(&self) -> u8 {
         self.header.opcode()
@@ -763,6 +750,3 @@ pub fn string_multimap<R: Read>(reader: &mut R) -> anyhow::Result<HashMap<String
     }
     Ok(multimap)
 }
-
-// todo inet fn (with port).
-// todo inet fn (with port).
