@@ -480,9 +480,14 @@ pub trait ColumnDecoder {
     where
         Self: Sized,
     {
-        let len = i32::try_decode_column(reader)? as u64;
-        let mut handle = reader.take(len);
-        Self::try_decode_column(&mut handle)
+        let len = i32::try_decode_column(reader)?;
+        if len > 0 {
+            let mut handle = reader.take(len as u64);
+            Self::try_decode_column(&mut handle)
+        } else {
+            let mut empty = std::io::empty();
+            Self::try_decode_column(&mut empty)
+        }
     }
     /// Decode the column.
     fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self>
