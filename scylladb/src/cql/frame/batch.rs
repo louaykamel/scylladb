@@ -292,8 +292,8 @@ impl<Type: Copy + Into<u8>> Statements for BatchBuilder<Type, BatchValues> {
         self.buffer.extend(statement.bytes());
         self.query_count += 1; // update querycount
                                // pad zero value_count for the query
-        self.buffer.extend(&[0, 0]);
         let index = self.buffer.len();
+        self.buffer.extend(&[0, 0]);
         BatchBuilder {
             buffer: self.buffer,
             query_count: self.query_count,
@@ -304,16 +304,15 @@ impl<Type: Copy + Into<u8>> Statements for BatchBuilder<Type, BatchValues> {
     /// Set the id in the Batch frame.
     fn id(mut self, id: &[u8; 16]) -> BatchBuilder<Type, BatchValues> {
         // adjust value_count for prev query
-        self.buffer[self.stage.index..(self.stage.index + 2)]
-            .copy_from_slice(&u16::to_be_bytes(self.stage.value_count));
+        self.commit_value_count();
         // prepared query
         self.buffer.push(1);
         self.buffer.extend(&MD5_BE_LENGTH);
         self.buffer.extend(id);
         self.query_count += 1;
         // pad zero value_count for the query
-        self.buffer.extend(&[0, 0]);
         let index = self.buffer.len();
+        self.buffer.extend(&[0, 0]);
         BatchBuilder {
             buffer: self.buffer,
             query_count: self.query_count,
@@ -326,8 +325,7 @@ impl<Type: Copy + Into<u8>> BatchBuilder<Type, BatchValues> {
     /// Set the consistency of the Batch frame.
     pub fn consistency(mut self, consistency: Consistency) -> BatchBuilder<Type, BatchFlags> {
         // adjust value_count for prev query
-        self.buffer[self.stage.index..(self.stage.index + 2)]
-            .copy_from_slice(&u16::to_be_bytes(self.stage.value_count));
+        self.commit_value_count();
         self.buffer.extend(&u16::to_be_bytes(consistency as u16));
         BatchBuilder {
             buffer: self.buffer,
