@@ -126,10 +126,7 @@ where
         }
     }
     fn encode(&self, buffer: &mut Vec<u8>) {
-        match self {
-            Some(value) => value.encode(buffer),
-            None => ColumnEncoder::encode(&UNSET_VALUE, buffer),
-        }
+        self.encode_column(buffer)
     }
 }
 

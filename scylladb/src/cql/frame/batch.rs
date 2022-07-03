@@ -241,6 +241,13 @@ impl<Type: Copy + Into<u8>> Statements for BatchBuilder<Type, BatchStatementOrId
     }
 }
 
+impl<Type: Copy + Into<u8>> BatchBuilder<Type, BatchValues> {
+    pub(crate) fn commit_value_count(&mut self) {
+        self.buffer[self.stage.index..(self.stage.index + 2)]
+            .copy_from_slice(&u16::to_be_bytes(self.stage.value_count));
+    }
+}
+
 impl<Type: Copy + Into<u8>> Binder for BatchBuilder<Type, BatchValues> {
     /// Set the value in the Batch frame.
     fn value<V: ColumnEncoder + Sync>(mut self, value: V) -> Self
@@ -278,8 +285,7 @@ impl<Type: Copy + Into<u8>> Statements for BatchBuilder<Type, BatchValues> {
     /// Set the statement in the Batch frame.
     fn statement(mut self, statement: &str) -> BatchBuilder<Type, BatchValues> {
         // adjust value_count for prev query(if any)
-        self.buffer[self.stage.index..(self.stage.index + 2)]
-            .copy_from_slice(&u16::to_be_bytes(self.stage.value_count));
+        self.commit_value_count();
         // normal query
         self.buffer.push(0);
         self.buffer.extend(&i32::to_be_bytes(statement.len() as i32));
