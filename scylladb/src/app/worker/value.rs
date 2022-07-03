@@ -118,15 +118,17 @@ where
                     worker.handle.handle_error(error)
                 })
             } else {
-                match self.retry() {
-                    Ok(_) => Ok(()),
-                    Err(worker) => worker.handle.handle_error(error),
+                if let Some(worker) = self.retry()? {
+                    worker.handle.handle_error(error)
+                } else {
+                    Ok(())
                 }
             }
         } else {
-            match self.retry() {
-                Ok(_) => Ok(()),
-                Err(worker) => worker.handle.handle_error(error),
+            if let Some(worker) = self.retry()? {
+                worker.handle.handle_error(error)
+            } else {
+                Ok(())
             }
         }
     }

@@ -104,9 +104,10 @@ where
     }
     fn handle_error(self: Box<Self>, error: WorkerError, _reporter: Option<&ReporterHandle>) -> anyhow::Result<()> {
         error!("{}", error);
-        match self.retry() {
-            Ok(_) => Ok(()),
-            Err(worker) => worker.handle.handle_error(error),
+        if let Some(worker) = self.retry()? {
+            worker.handle.handle_error(error)
+        } else {
+            Ok(())
         }
     }
 }

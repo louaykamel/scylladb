@@ -944,6 +944,10 @@ impl Request for UpdateRequest {
         self.0.statement()
     }
 
+    fn statement_by_id(&self, id: &[u8; 16]) -> Option<DataManipulationStatement> {
+        self.0.statement_by_id(id)
+    }
+
     fn payload(&self) -> Vec<u8> {
         self.0.payload()
     }

@@ -88,8 +88,9 @@ pub trait RetryableWorker<R>: Worker {
         *self.retries_mut() = retries;
         self
     }
+
     /// Retry the worker
-    fn retry(mut self: Box<Self>) -> Result<(), Box<Self>>
+    fn retry(mut self: Box<Self>) -> anyhow::Result<Option<Box<Self>>>
     where
         Self: 'static + Sized,
         R: Request,
@@ -97,16 +98,21 @@ pub trait RetryableWorker<R>: Worker {
         if self.retries() > 0 {
             *self.retries_mut() -= 1;
             // currently we assume all cql/worker errors are retryable, but we might change this in future
-            send_global(
+            if let Err(ring_send_error) = send_global(
                 self.request().keyspace().as_ref().map(|s| s.as_str()),
                 self.request().token(),
                 self.request().payload(),
                 self,
-            )
-            .ok();
-            Ok(())
+            ) {
+                if let ReporterEvent::Request { worker, .. } = ring_send_error.into() {
+                    worker.handle_error(WorkerError::Other(anyhow::Error::msg("Retrying on the fly")), None)?;
+                } else {
+                    unreachable!("Unexpected report event variant while sending retry request using send global");
+                };
+            }
+            Ok(None)
         } else {
-            Err(self)
+            Ok(Some(self))
         }
     }
 
@@ -216,7 +222,6 @@ pub trait RetryableWorker<R>: Worker {
 /// Defines a worker which can be given a handle to be capable of responding to the sender
 pub trait IntoRespondingWorker<R, H, O>
 where
-    H: HandleResponse<O> + HandleError,
     R: SendRequestExt,
 {
     /// The type of worker which will be created
@@ -227,10 +232,7 @@ where
 
 /// A worker which can respond to a sender
 #[async_trait::async_trait]
-pub trait RespondingWorker<R, H, O>: Worker
-where
-    H: HandleResponse<O> + HandleError,
-{
+pub trait RespondingWorker<R, H, O>: Worker {
     /// Get the handle this worker will use to respond
     fn handle(&self) -> &H;
 }
@@ -268,14 +270,17 @@ where
     W: 'static + Worker + RetryableWorker<R> + Send + Sync,
     R: Request,
 {
-    let statement = worker.request().statement();
-    info!("Attempting to prepare statement '{}', id: '{:?}'", statement, id);
-    PrepareWorker::new(id, statement.try_into().unwrap())
-        .send_to_reporter(reporter)
-        .ok();
-    let payload = worker.request().payload();
-    let retry_request = ReporterEvent::Request { worker, payload };
-    reporter.send(retry_request).ok();
+    if let Some(statement) = worker.request().statement_by_id(&id) {
+        info!("Attempting to prepare statement '{}', id: '{:?}'", statement, id);
+        PrepareWorker::new(id, statement.try_into().unwrap())
+            .send_to_reporter(reporter)
+            .ok();
+        let payload = worker.request().payload();
+        let retry_request = ReporterEvent::Request { worker, payload };
+        reporter.send(retry_request).ok();
+    } else {
+        log::error!("Unable to handle unprepared error, due to missing statement by id")
+    };
     Ok(())
 }
 
@@ -299,3 +304,5 @@ pub fn retry_send(keyspace: Option<&str>, mut r: RingSendError, mut retries: u8)
     }
     Ok(())
 }
+/// Provides atomic worker functionality
+pub mod atomic;

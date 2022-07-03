@@ -1134,6 +1134,10 @@ impl<O: 'static> Request for SelectRequest<O> {
         self.inner.statement()
     }
 
+    fn statement_by_id(&self, id: &[u8; 16]) -> Option<DataManipulationStatement> {
+        self.inner.statement_by_id(id)
+    }
+
     fn payload(&self) -> Vec<u8> {
         self.inner.payload()
     }

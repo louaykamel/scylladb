@@ -66,6 +66,20 @@ impl<R> BasicRetryWorker<R> {
     }
 }
 
+impl<R, H, O, E> IntoRespondingWorker<R, super::atomic::AtomicHandle<H, O, E>, Decoder> for BasicRetryWorker<R>
+where
+    H: 'static + super::atomic::DropResult<O, E> + Debug + Send + Sync,
+    R: 'static + Send + Debug + Request + Sync + SendRequestExt,
+    H: super::atomic::DropResult<O, E>,
+    O: Default + 'static + Send + Sync + Debug,
+    E: Default + 'static + Send + Sync + Debug,
+{
+    type Output = super::atomic::AtomicWorker<R, super::atomic::AtomicHandle<H, O, E>>;
+    fn with_handle(self: Box<Self>, handle: super::atomic::AtomicHandle<H, O, E>) -> Box<Self::Output> {
+        super::atomic::AtomicWorker::from(*self, handle)
+    }
+}
+
 impl<R, H> IntoRespondingWorker<R, H, Decoder> for BasicRetryWorker<R>
 where
     H: 'static + HandleResponse<Decoder> + HandleError + Debug + Send + Sync,
@@ -76,6 +90,7 @@ where
         SelectWorker::<H, R>::from(*self, handle)
     }
 }
+
 impl<H, V> IntoRespondingWorker<SelectRequest<V>, H, Option<V>> for BasicRetryWorker<SelectRequest<V>>
 where
     H: 'static + HandleResponse<Option<V>> + HandleError + Debug + Send + Sync,
@@ -111,14 +126,25 @@ where
         if let WorkerError::Cql(ref mut cql_error) = error {
             if let (Some(id), Some(reporter)) = (cql_error.take_unprepared_id(), reporter_opt) {
                 handle_unprepared_error(self, id, reporter).map_err(|worker| {
-                    error!("Error trying to reprepare query: {}", worker.request().statement());
+                    error!(
+                        "Error trying to reprepare query: {:?}",
+                        worker.request().statement_by_id(&id)
+                    );
                     anyhow::anyhow!("Error trying to reprepare query!")
                 })
             } else {
-                self.retry().map_err(|_| anyhow::anyhow!("Cannot retry!"))
+                if let Some(_) = self.retry()? {
+                    anyhow::bail!("Cannot retry!")
+                } else {
+                    Ok(())
+                }
             }
         } else {
-            self.retry().map_err(|_| anyhow::anyhow!("Cannot retry!"))
+            if let Some(_) = self.retry()? {
+                anyhow::bail!("Cannot retry!")
+            } else {
+                Ok(())
+            }
         }
     }
 }

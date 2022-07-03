@@ -662,6 +662,10 @@ impl Request for BatchRequest {
         panic!("Must use `get_statement` on batch requests!")
     }
 
+    fn statement_by_id(&self, id: &[u8; 16]) -> Option<DataManipulationStatement> {
+        self.map.get(id).map(|s| s.clone().into())
+    }
+
     fn payload(&self) -> Vec<u8> {
         self.payload.clone()
     }

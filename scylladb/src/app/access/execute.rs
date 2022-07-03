@@ -191,6 +191,15 @@ impl Request for ExecuteRequest {
         self.statement.clone().into()
     }
 
+    fn statement_by_id(&self, id: &[u8; 16]) -> Option<DataManipulationStatement> {
+        let statement_id: [u8; 16] = md5::compute(self.statement.to_string().as_bytes()).into();
+        if &statement_id == id {
+            self.statement.clone().try_into().ok()
+        } else {
+            None
+        }
+    }
+
     fn payload(&self) -> Vec<u8> {
         self.payload.clone()
     }

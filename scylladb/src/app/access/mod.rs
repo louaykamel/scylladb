@@ -178,6 +178,9 @@ pub trait Request {
     /// Get the statement that was used to create this request
     fn statement(&self) -> Statement;
 
+    /// Get the statement if the id matches any request statement(s)
+    fn statement_by_id(&self, id: &[u8; 16]) -> Option<DataManipulationStatement>;
+
     /// Get the request payload
     fn payload(&self) -> Vec<u8>;
 
@@ -375,6 +378,15 @@ impl Request for CommonRequest {
 
     fn statement(&self) -> Statement {
         self.statement.clone().into()
+    }
+
+    fn statement_by_id(&self, id: &[u8; 16]) -> Option<DataManipulationStatement> {
+        let statement_id: [u8; 16] = md5::compute(self.statement.to_string().as_bytes()).into();
+        if &statement_id == id {
+            self.statement.clone().into()
+        } else {
+            None
+        }
     }
 
     fn payload(&self) -> Vec<u8> {
