@@ -1485,6 +1485,16 @@ pub enum ModificationStatement {
     Delete(DeleteStatement),
 }
 
+impl Into<DataManipulationStatement> for ModificationStatement {
+    fn into(self) -> DataManipulationStatement {
+        match self {
+            ModificationStatement::Insert(i) => DataManipulationStatement::Insert(i),
+            ModificationStatement::Update(u) => DataManipulationStatement::Update(u),
+            ModificationStatement::Delete(d) => DataManipulationStatement::Delete(d),
+        }
+    }
+}
+
 impl TryFrom<TaggedModificationStatement> for ModificationStatement {
     type Error = anyhow::Error;
     fn try_from(value: TaggedModificationStatement) -> Result<Self, Self::Error> {
