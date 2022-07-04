@@ -1,7 +1,12 @@
 use super::*;
+use atomic::{
+    AtomicHandle,
+    AtomicWorker,
+};
 use std::{
     fmt::Debug,
     marker::PhantomData,
+    sync::Arc,
 };
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -65,8 +70,7 @@ impl<R> BasicRetryWorker<R> {
         Box::new(request.into())
     }
 }
-
-impl<R, H, O, E> IntoRespondingWorker<R, super::atomic::AtomicHandle<H, O, E>, Decoder> for BasicRetryWorker<R>
+impl<R, H, O, E> IntoRespondingWorker<R, Arc<AtomicHandle<H, O, E>>, Decoder> for BasicRetryWorker<R>
 where
     H: 'static + super::atomic::DropResult<O, E> + Debug + Send + Sync,
     R: 'static + Send + Debug + Request + Sync + SendRequestExt,
@@ -74,8 +78,8 @@ where
     O: Default + 'static + Send + Sync + Debug,
     E: Default + 'static + Send + Sync + Debug,
 {
-    type Output = super::atomic::AtomicWorker<R, super::atomic::AtomicHandle<H, O, E>>;
-    fn with_handle(self: Box<Self>, handle: super::atomic::AtomicHandle<H, O, E>) -> Box<Self::Output> {
+    type Output = AtomicWorker<R, Arc<AtomicHandle<H, O, E>>>;
+    fn with_handle(self: Box<Self>, handle: Arc<AtomicHandle<H, O, E>>) -> Box<Self::Output> {
         super::atomic::AtomicWorker::from(*self, handle)
     }
 }

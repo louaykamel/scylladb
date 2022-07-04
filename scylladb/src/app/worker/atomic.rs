@@ -1,4 +1,8 @@
 use super::*;
+use std::sync::{
+    atomic::Ordering,
+    Arc,
+};
 /// Atomic handle enables sending multiple queries and get one response once all dropped.
 #[derive(Debug)]
 pub struct AtomicHandle<H, O, E>
@@ -10,7 +14,7 @@ where
     handle: Option<H>,
     ok: O,
     err: E,
-    any_error: std::sync::atomic::AtomicBool,
+    any_error: std::sync::atomic::AtomicI8,
 }
 
 /// Drop Result from atomic handle
@@ -54,21 +58,26 @@ where
     H: DropResult<O, E>,
 {
     /// Create new atomic handle
-    pub fn new(handle: H, ok: O, err: E) -> std::sync::Arc<Self> {
+    pub fn new(handle: H, ok: O, err: E) -> Arc<Self> {
         Self {
             handle: Some(handle),
             ok,
             err,
-            any_error: std::sync::atomic::AtomicBool::new(false),
+            any_error: std::sync::atomic::AtomicI8::new(0),
         }
         .into()
     }
     /// Set the atomic error
-    pub fn set_error(&self) {
-        self.any_error.store(true, std::sync::atomic::Ordering::SeqCst);
+    pub fn set_error(&self) -> Result<i8, i8> {
+        self.any_error
+            .compare_exchange(0, 1, Ordering::SeqCst, Ordering::Acquire)
+    }
+    /// Set any error to any value except (0, 1) to disable it from dropping a result
+    pub fn disable(&self) {
+        self.any_error.store(-1, Ordering::SeqCst)
     }
     /// Try to take the inner handle to prevent drop impl from dropping a result into the handle
-    pub fn take(self: &mut std::sync::Arc<Self>) -> Option<H> {
+    pub fn take(self: &mut Arc<Self>) -> Option<H> {
         std::sync::Arc::get_mut(self).and_then(|this| this.handle.take())
     }
 }
@@ -80,14 +89,18 @@ where
     E: Default,
 {
     fn drop(&mut self) {
-        if self.any_error.load(std::sync::atomic::Ordering::Relaxed) {
-            self.handle
-                .take()
-                .and_then(|mut h| h.drop_result(Err(std::mem::take(&mut self.err))));
-        } else {
-            self.handle
-                .take()
-                .and_then(|mut h| h.drop_result(Ok(std::mem::take(&mut self.ok))));
+        match self.any_error.load(std::sync::atomic::Ordering::Relaxed) {
+            0 => {
+                self.handle
+                    .take()
+                    .and_then(|mut h| h.drop_result(Ok(std::mem::take(&mut self.ok))));
+            }
+            1 => {
+                self.handle
+                    .take()
+                    .and_then(|mut h| h.drop_result(Err(std::mem::take(&mut self.err))));
+            }
+            _ => (),
         }
     }
 }
@@ -103,7 +116,7 @@ pub struct AtomicWorker<R, H> {
     pub handle: H,
 }
 
-impl<R, H, O, E> AtomicWorker<R, AtomicHandle<H, O, E>>
+impl<R, H, O, E> AtomicWorker<R, Arc<AtomicHandle<H, O, E>>>
 where
     R: std::fmt::Debug + 'static + Send + Sync + Request,
     H: std::fmt::Debug + 'static + Send + Sync + DropResult<O, E>,
@@ -111,7 +124,7 @@ where
     E: std::fmt::Debug + 'static + Send + Sync + Default,
 {
     /// Create atomic worker
-    pub fn new(request: R, handle: AtomicHandle<H, O, E>) -> Box<Self> {
+    pub fn new(request: R, handle: Arc<AtomicHandle<H, O, E>>) -> Box<Self> {
         Self {
             request,
             retries: 0,
@@ -122,7 +135,7 @@ where
 
     pub(crate) fn from(
         BasicRetryWorker { request, retries }: BasicRetryWorker<R>,
-        handle: AtomicHandle<H, O, E>,
+        handle: Arc<AtomicHandle<H, O, E>>,
     ) -> Box<Self>
     where
         R: 'static + Request + std::fmt::Debug + Send + Sync,
@@ -145,7 +158,7 @@ where
     }
 }
 
-impl<R, H, O, E> super::Worker for AtomicWorker<R, AtomicHandle<H, O, E>>
+impl<R, H, O, E> super::Worker for AtomicWorker<R, Arc<AtomicHandle<H, O, E>>>
 where
     R: std::fmt::Debug + 'static + Send + Sync + Request,
     H: std::fmt::Debug + 'static + Send + Sync + DropResult<O, E>,
@@ -169,7 +182,7 @@ where
                     .request
                     .statement_by_id(&id)
                     .ok_or_else(|| {
-                        self.handle.set_error();
+                        self.handle.set_error().ok();
                         anyhow::anyhow!("Unable to get statement for a request {:?}", self.request)
                     })?
                     .clone()
@@ -178,7 +191,7 @@ where
             }
         }
         if let Some(worker) = self.retry()? {
-            worker.handle.set_error();
+            worker.handle.set_error().ok();
             anyhow::bail!("AtomicWorker Consumed all retries")
         } else {
             Ok(())
@@ -186,7 +199,7 @@ where
     }
 }
 
-impl<R, H, O, E> RetryableWorker<R> for AtomicWorker<R, AtomicHandle<H, O, E>>
+impl<R, H, O, E> RetryableWorker<R> for AtomicWorker<R, Arc<AtomicHandle<H, O, E>>>
 where
     R: std::fmt::Debug + 'static + Send + Sync + Request,
     H: std::fmt::Debug + 'static + Send + Sync + DropResult<O, E>,
@@ -206,14 +219,15 @@ where
     }
 }
 
-impl<R, H, O, E> RespondingWorker<R, AtomicHandle<H, O, E>, Decoder> for AtomicWorker<R, AtomicHandle<H, O, E>>
+impl<R, H, O, E> RespondingWorker<R, Arc<AtomicHandle<H, O, E>>, Decoder>
+    for AtomicWorker<R, Arc<AtomicHandle<H, O, E>>>
 where
     H: 'static + DropResult<O, E> + std::fmt::Debug + Send + Sync,
     R: 'static + Send + std::fmt::Debug + Request + Sync,
     O: Default + 'static + Send + std::fmt::Debug + Sync,
     E: Default + 'static + Send + std::fmt::Debug + Sync,
 {
-    fn handle(&self) -> &AtomicHandle<H, O, E> {
+    fn handle(&self) -> &Arc<AtomicHandle<H, O, E>> {
         &self.handle
     }
 }
