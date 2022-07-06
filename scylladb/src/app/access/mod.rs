@@ -270,6 +270,11 @@ pub trait SendRequestExt: 'static + Request + Debug + Send + Sync + Sized {
     where
         Self::Marker: Send + Sync,
         Self::Worker: IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        <Self::Worker as IntoRespondingWorker<
+            Self,
+            tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>,
+            Decoder,
+        >>::Output: RetryableWorker<Self>,
     {
         self.worker().get_local().await
     }
@@ -282,6 +287,8 @@ pub trait SendRequestExt: 'static + Request + Debug + Send + Sync + Sized {
     where
         Self::Marker: Send + Sync,
         W: IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        <W as IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>>::Output:
+            RetryableWorker<Self>,
     {
         worker.get_local().await
     }
@@ -290,6 +297,11 @@ pub trait SendRequestExt: 'static + Request + Debug + Send + Sync + Sized {
     fn get_local_blocking(self) -> Result<<Self::Marker as Marker>::Output, RequestError>
     where
         Self::Worker: IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        <Self::Worker as IntoRespondingWorker<
+            Self,
+            tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>,
+            Decoder,
+        >>::Output: RetryableWorker<Self>,
     {
         self.worker().get_local_blocking()
     }
@@ -301,6 +313,8 @@ pub trait SendRequestExt: 'static + Request + Debug + Send + Sync + Sized {
     ) -> Result<<Self::Marker as Marker>::Output, RequestError>
     where
         W: IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        <W as IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>>::Output:
+            RetryableWorker<Self>,
     {
         worker.get_local_blocking()
     }
@@ -310,6 +324,11 @@ pub trait SendRequestExt: 'static + Request + Debug + Send + Sync + Sized {
     where
         Self::Marker: Send + Sync,
         Self::Worker: IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        <Self::Worker as IntoRespondingWorker<
+            Self,
+            tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>,
+            Decoder,
+        >>::Output: RetryableWorker<Self>,
     {
         self.worker().get_global().await
     }
@@ -322,6 +341,8 @@ pub trait SendRequestExt: 'static + Request + Debug + Send + Sync + Sized {
     where
         Self::Marker: Send + Sync,
         W: IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        <W as IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>>::Output:
+            RetryableWorker<Self>,
     {
         worker.get_global().await
     }
@@ -330,6 +351,11 @@ pub trait SendRequestExt: 'static + Request + Debug + Send + Sync + Sized {
     fn get_global_blocking(self) -> Result<<Self::Marker as Marker>::Output, RequestError>
     where
         Self::Worker: IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        <Self::Worker as IntoRespondingWorker<
+            Self,
+            tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>,
+            Decoder,
+        >>::Output: RetryableWorker<Self>,
     {
         self.worker().get_global_blocking()
     }
@@ -341,6 +367,8 @@ pub trait SendRequestExt: 'static + Request + Debug + Send + Sync + Sized {
     ) -> Result<<Self::Marker as Marker>::Output, RequestError>
     where
         W: IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        <W as IntoRespondingWorker<Self, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>>::Output:
+            RetryableWorker<Self>,
     {
         worker.get_global_blocking()
     }

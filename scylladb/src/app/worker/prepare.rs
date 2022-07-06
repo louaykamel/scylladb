@@ -67,17 +67,17 @@ impl RetryableWorker<PrepareRequest> for PrepareWorker {
 
 impl<H> IntoRespondingWorker<PrepareRequest, H, Decoder> for PrepareWorker
 where
-    H: 'static + HandleResponse<Decoder> + HandleError + Debug + Send + Sync,
+    H: 'static + HandleResult<Decoder, WorkerError> + Debug + Send + Sync,
 {
     type Output = RespondingPrepareWorker<H>;
 
-    fn with_handle(self: Box<Self>, handle: H) -> Box<Self::Output> {
-        Box::new(RespondingPrepareWorker {
+    fn with_handle(self, handle: H) -> Self::Output {
+        RespondingPrepareWorker {
             id: self.id,
             retries: self.retries,
             request: self.request,
             handle,
-        })
+        }
     }
 }
 
@@ -94,7 +94,7 @@ pub struct RespondingPrepareWorker<H> {
 
 impl<H> Worker for RespondingPrepareWorker<H>
 where
-    H: 'static + HandleResponse<Decoder> + HandleError + Debug + Send + Sync,
+    H: 'static + HandleResult<Decoder, WorkerError> + Debug + Send + Sync,
 {
     fn handle_response(self: Box<Self>, giveload: Vec<u8>) -> anyhow::Result<()> {
         match Decoder::try_from(giveload) {
@@ -114,7 +114,7 @@ where
 
 impl<H> RetryableWorker<PrepareRequest> for RespondingPrepareWorker<H>
 where
-    H: 'static + HandleResponse<Decoder> + HandleError + Debug + Send + Sync,
+    H: 'static + HandleResult<Decoder, WorkerError> + Debug + Send + Sync,
 {
     fn retries(&self) -> usize {
         self.retries
@@ -131,7 +131,7 @@ where
 
 impl<H> RespondingWorker<PrepareRequest, H, Decoder> for RespondingPrepareWorker<H>
 where
-    H: 'static + HandleResponse<Decoder> + HandleError + Debug + Send + Sync,
+    H: 'static + HandleResult<Decoder, WorkerError> + Debug + Send + Sync,
 {
     fn handle(&self) -> &H {
         &self.handle

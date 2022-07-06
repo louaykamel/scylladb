@@ -1,12 +1,7 @@
 use super::*;
-use atomic::{
-    AtomicHandle,
-    AtomicWorker,
-};
 use std::{
     fmt::Debug,
     marker::PhantomData,
-    sync::Arc,
 };
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -70,39 +65,15 @@ impl<R> BasicRetryWorker<R> {
         Box::new(request.into())
     }
 }
-impl<R, H, O, E> IntoRespondingWorker<R, Arc<AtomicHandle<H, O, E>>, Decoder> for BasicRetryWorker<R>
-where
-    H: 'static + super::atomic::DropResult<O, E> + Debug + Send + Sync,
-    R: 'static + Send + Debug + Request + Sync + SendRequestExt,
-    H: super::atomic::DropResult<O, E>,
-    O: Default + 'static + Send + Sync + Debug,
-    E: Default + 'static + Send + Sync + Debug,
-{
-    type Output = AtomicWorker<R, Arc<AtomicHandle<H, O, E>>>;
-    fn with_handle(self: Box<Self>, handle: Arc<AtomicHandle<H, O, E>>) -> Box<Self::Output> {
-        super::atomic::AtomicWorker::from(*self, handle)
-    }
-}
 
-impl<R, H> IntoRespondingWorker<R, H, Decoder> for BasicRetryWorker<R>
+impl<R, H> IntoRespondingWorker<R, H> for BasicRetryWorker<R>
 where
-    H: 'static + HandleResponse<Decoder> + HandleError + Debug + Send + Sync,
+    H: 'static + Debug + Send + Sync,
     R: 'static + Send + Debug + Request + Sync + SendRequestExt,
 {
-    type Output = SelectWorker<H, R>;
-    fn with_handle(self: Box<Self>, handle: H) -> Box<SelectWorker<H, R>> {
-        SelectWorker::<H, R>::from(*self, handle)
-    }
-}
-
-impl<H, V> IntoRespondingWorker<SelectRequest<V>, H, Option<V>> for BasicRetryWorker<SelectRequest<V>>
-where
-    H: 'static + HandleResponse<Option<V>> + HandleError + Debug + Send + Sync,
-    V: 'static + Send + RowsDecoder + Debug,
-{
-    type Output = ValueWorker<H, V, SelectRequest<V>>;
-    fn with_handle(self: Box<Self>, handle: H) -> Box<ValueWorker<H, V, SelectRequest<V>>> {
-        ValueWorker::<H, V, SelectRequest<V>>::from(*self, handle)
+    type Output = AnyWorker<H, R>;
+    fn with_handle(self, handle: H) -> AnyWorker<H, R> {
+        AnyWorker::<H, R>::from(self, handle)
     }
 }
 
@@ -137,18 +108,12 @@ where
                     anyhow::anyhow!("Error trying to reprepare query!")
                 })
             } else {
-                if let Some(_) = self.retry()? {
-                    anyhow::bail!("Cannot retry!")
-                } else {
-                    Ok(())
-                }
+                self.retry()?
+                    .map_or_else(|| Ok(()), |_| anyhow::bail!("Basic worker consumed all retries"))
             }
         } else {
-            if let Some(_) = self.retry()? {
-                anyhow::bail!("Cannot retry!")
-            } else {
-                Ok(())
-            }
+            self.retry()?
+                .map_or_else(|| Ok(()), |_| anyhow::bail!("Basic worker consumed all retries"))
         }
     }
 }
@@ -195,6 +160,7 @@ where
     pub fn send_to_reporter(self: Box<Self>, reporter: &ReporterHandle) -> Result<DecodeResult<R::Marker>, RequestError>
     where
         Self: 'static + Sized,
+        W: Worker,
         R: SendRequestExt,
     {
         Box::new(self.worker.clone()).send_to_reporter(reporter)?;
@@ -205,6 +171,7 @@ where
     pub fn send_local(self: Box<Self>) -> Result<DecodeResult<R::Marker>, RequestError>
     where
         Self: 'static + Sized,
+        W: Worker,
         R: SendRequestExt,
     {
         Box::new(self.worker.clone()).send_local()?;
@@ -215,6 +182,7 @@ where
     pub fn send_global(self: Box<Self>) -> Result<DecodeResult<R::Marker>, RequestError>
     where
         Self: 'static + Sized,
+        W: Worker,
         R: SendRequestExt,
     {
         Box::new(self.worker.clone()).send_global()?;
@@ -225,7 +193,7 @@ where
 impl<R, W> SpawnableRespondWorker<R, UnboundedReceiver<Result<Decoder, WorkerError>>, W>
 where
     R: 'static + SendRequestExt + Clone + Debug + Send + Sync,
-    W: 'static + RetryableWorker<R> + Clone,
+    W: 'static + RetryableWorker<R> + Clone + Worker,
 {
     /// Send a spawned worker to the local datacenter and await a response asynchronously
     pub async fn get_local(&mut self) -> Result<<R::Marker as Marker>::Output, RequestError>
@@ -245,6 +213,7 @@ where
     pub fn get_local_blocking(&mut self) -> Result<<R::Marker as Marker>::Output, RequestError>
     where
         Self: Sized,
+        W: Worker,
     {
         let marker = Box::new(self.worker.clone()).send_local()?;
         Ok(marker.try_decode(
@@ -258,6 +227,7 @@ where
     pub async fn get_global(&mut self) -> Result<<R::Marker as Marker>::Output, RequestError>
     where
         Self: Sized,
+        W: Worker,
     {
         let marker = Box::new(self.worker.clone()).send_global()?;
         Ok(marker.try_decode(
@@ -272,6 +242,7 @@ where
     pub fn get_global_blocking(&mut self) -> Result<<R::Marker as Marker>::Output, RequestError>
     where
         Self: Sized,
+        W: Worker,
     {
         let marker = Box::new(self.worker.clone()).send_global()?;
         Ok(marker.try_decode(

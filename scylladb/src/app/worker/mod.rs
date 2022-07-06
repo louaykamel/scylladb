@@ -10,27 +10,33 @@ use crate::{
     cql::{
         CqlError,
         Decoder,
-        RowsDecoder,
     },
 };
+pub use any::AnyWorker;
 use anyhow::anyhow;
 pub use basic::{
     BasicRetryWorker,
     BasicWorker,
     SpawnableRespondWorker,
 };
+pub use handle::{
+    AtomicHandle,
+    Refer,
+};
 use log::*;
 pub use prepare::PrepareWorker;
-pub use select::SelectWorker;
 use std::convert::TryFrom;
 use thiserror::Error;
-use tokio::sync::mpsc::UnboundedSender;
-pub use value::ValueWorker;
+use tokio::{
+    runtime::Handle,
+    sync::mpsc::UnboundedSender,
+    task,
+};
 
+mod any;
 mod basic;
+mod handle;
 mod prepare;
-mod select;
-mod value;
 
 /// WorkerId trait type which will be implemented by worker in order to send their channel_tx.
 pub trait Worker: Send + Sync + std::fmt::Debug + 'static {
@@ -61,14 +67,11 @@ pub enum WorkerError {
 }
 
 /// should be implemented on the handle of the worker
-pub trait HandleResponse<O> {
+pub trait HandleResult<O, E> {
     /// Handle response for worker of type W
-    fn handle_response(self, response: O) -> anyhow::Result<()>;
-}
-/// should be implemented on the handle of the worker
-pub trait HandleError {
+    fn handle_response(self, ok: O) -> anyhow::Result<()>;
     /// Handle error for worker of type W
-    fn handle_error(self, worker_error: WorkerError) -> anyhow::Result<()>;
+    fn handle_error(self, err: E) -> anyhow::Result<()>;
 }
 
 /// Defines a worker which contains enough information to retry on a failure
@@ -81,18 +84,18 @@ pub trait RetryableWorker<R>: Worker {
     /// Get the request
     fn request(&self) -> &R;
     /// Update the retry count
-    fn with_retries(mut self: Box<Self>, retries: usize) -> Box<Self>
+    fn with_retries(mut self, retries: usize) -> Self
     where
-        Self: Sized,
+        Self: Sized + Into<Box<Self>>,
     {
         *self.retries_mut() = retries;
         self
     }
 
     /// Retry the worker
-    fn retry(mut self: Box<Self>) -> anyhow::Result<Option<Box<Self>>>
+    fn retry(mut self) -> anyhow::Result<Option<Box<Self>>>
     where
-        Self: 'static + Sized,
+        Self: 'static + Sized + Into<Box<Self>> + Worker,
         R: Request,
     {
         if self.retries() > 0 {
@@ -102,7 +105,7 @@ pub trait RetryableWorker<R>: Worker {
                 self.request().keyspace().as_ref().map(|s| s.as_str()),
                 self.request().token(),
                 self.request().payload(),
-                self,
+                self.into(),
             ) {
                 if let ReporterEvent::Request { worker, .. } = ring_send_error.into() {
                     worker.handle_error(WorkerError::Other(anyhow::Error::msg("Retrying on the fly")), None)?;
@@ -112,14 +115,14 @@ pub trait RetryableWorker<R>: Worker {
             }
             Ok(None)
         } else {
-            Ok(Some(self))
+            Ok(Some(self.into()))
         }
     }
 
     /// Send the worker to a specific reporter, without waiting for a response
     fn send_to_reporter(self: Box<Self>, reporter: &ReporterHandle) -> Result<DecodeResult<R::Marker>, RequestError>
     where
-        Self: 'static + Sized,
+        Self: 'static + Sized + Worker,
         R: SendRequestExt,
     {
         let request = ReporterEvent::Request {
@@ -131,40 +134,59 @@ pub trait RetryableWorker<R>: Worker {
     }
 
     /// Send the worker to the local datacenter, without waiting for a response
-    fn send_local(self: Box<Self>) -> Result<DecodeResult<R::Marker>, RequestError>
+    fn send_local(self) -> Result<DecodeResult<R::Marker>, RequestError>
     where
-        Self: 'static + Sized,
+        Self: 'static + Sized + Into<Box<Self>> + Worker,
         R: SendRequestExt,
     {
-        send_local(
+        if let Err(ring_send_error) = send_local(
             self.request().keyspace().as_ref().map(|s| s.as_str()),
             self.request().token(),
             self.request().payload(),
-            self,
-        )?;
+            self.into(),
+        ) {
+            if let ReporterEvent::Request { worker, .. } = ring_send_error.into() {
+                worker
+                    .handle_error(WorkerError::Other(anyhow::Error::msg("Retrying on the fly")), None)
+                    .map_err(|e| RequestError::Other(e))?
+            } else {
+                unreachable!("Unexpected report event variant while sending retry request using send local");
+            }
+        };
         Ok(DecodeResult::new(R::Marker::new(), R::TYPE))
     }
 
     /// Send the worker to a global datacenter, without waiting for a response
-    fn send_global(self: Box<Self>) -> Result<DecodeResult<R::Marker>, RequestError>
+    fn send_global(self) -> Result<DecodeResult<R::Marker>, RequestError>
     where
-        Self: 'static + Sized,
+        Self: 'static + Sized + Into<Box<Self>> + Worker,
         R: SendRequestExt,
     {
-        send_global(
+        if let Err(ring_send_error) = send_global(
             self.request().keyspace().as_ref().map(|s| s.as_str()),
             self.request().token(),
             self.request().payload(),
-            self,
-        )?;
+            self.into(),
+        ) {
+            if let ReporterEvent::Request { worker, .. } = ring_send_error.into() {
+                worker
+                    .handle_error(WorkerError::Other(anyhow::Error::msg("Retrying on the fly")), None)
+                    .map_err(|e| RequestError::Other(e))?
+            } else {
+                unreachable!("Unexpected report event variant while sending retry request using send global");
+            }
+        };
         Ok(DecodeResult::new(R::Marker::new(), R::TYPE))
     }
 
     /// Send the worker to the local datacenter and await a response asynchronously
-    async fn get_local(self: Box<Self>) -> Result<<R::Marker as Marker>::Output, RequestError>
+    async fn get_local(self) -> Result<<R::Marker as Marker>::Output, RequestError>
     where
         R: SendRequestExt,
-        Self: 'static + IntoRespondingWorker<R, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        Self: 'static
+            + IntoRespondingWorker<R, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>
+            + Into<Box<Self>>,
+        Self::Output: RetryableWorker<R> + Worker,
         R::Marker: Send + Sync,
     {
         let (handle, inbox) = tokio::sync::oneshot::channel();
@@ -177,27 +199,36 @@ pub trait RetryableWorker<R>: Worker {
     }
 
     /// Send the worker to the local datacenter and await a response synchronously
-    fn get_local_blocking(self: Box<Self>) -> Result<<R::Marker as Marker>::Output, RequestError>
+    fn get_local_blocking(self) -> Result<<R::Marker as Marker>::Output, RequestError>
     where
         R: SendRequestExt,
-        Self: 'static + IntoRespondingWorker<R, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        Self: 'static
+            + IntoRespondingWorker<R, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>
+            + Into<Box<Self>>,
+        Self::Output: RetryableWorker<R> + Worker,
     {
         let (handle, inbox) = tokio::sync::oneshot::channel();
         let marker = self.with_handle(handle).send_local()?;
+
         Ok(marker.try_decode(
-            futures::executor::block_on(inbox).map_err(|e| anyhow::anyhow!("No response from worker: {}", e))??,
+            task::block_in_place(move || Handle::current().block_on(async move { inbox.await }))
+                .map_err(|e| anyhow::anyhow!("No response from worker: {}", e))??,
         )?)
     }
 
     /// Send the worker to a global datacenter and await a response asynchronously
-    async fn get_global(self: Box<Self>) -> Result<<R::Marker as Marker>::Output, RequestError>
+    async fn get_global(self) -> Result<<R::Marker as Marker>::Output, RequestError>
     where
         R: SendRequestExt,
-        Self: 'static + IntoRespondingWorker<R, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        Self: 'static
+            + IntoRespondingWorker<R, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>
+            + Into<Box<Self>>,
+        Self::Output: RetryableWorker<R> + Worker,
         R::Marker: Send + Sync,
     {
         let (handle, inbox) = tokio::sync::oneshot::channel();
         let marker = self.with_handle(handle).send_global()?;
+
         Ok(marker.try_decode(
             inbox
                 .await
@@ -206,28 +237,50 @@ pub trait RetryableWorker<R>: Worker {
     }
 
     /// Send the worker to a global datacenter and await a response synchronously
-    fn get_global_blocking(self: Box<Self>) -> Result<<R::Marker as Marker>::Output, RequestError>
+    fn get_global_blocking(self) -> Result<<R::Marker as Marker>::Output, RequestError>
     where
         R: SendRequestExt,
-        Self: 'static + IntoRespondingWorker<R, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>,
+        Self: 'static
+            + IntoRespondingWorker<R, tokio::sync::oneshot::Sender<Result<Decoder, WorkerError>>, Decoder>
+            + Into<Box<Self>>,
+        Self::Output: RetryableWorker<R> + Worker,
     {
         let (handle, inbox) = tokio::sync::oneshot::channel();
         let marker = self.with_handle(handle).send_global()?;
+
         Ok(marker.try_decode(
-            futures::executor::block_on(inbox).map_err(|e| anyhow::anyhow!("No response from worker: {}", e))??,
+            task::block_in_place(move || Handle::current().block_on(async move { inbox.await }))
+                .map_err(|e| anyhow::anyhow!("No response from worker: {}", e))??,
         )?)
     }
 }
 
 /// Defines a worker which can be given a handle to be capable of responding to the sender
-pub trait IntoRespondingWorker<R, H, O>
+pub trait IntoReferencingWorker<Ref> {
+    /// The type of worker which will be created
+    type Output: Send;
+    /// Give the worker a reference
+    fn with_ref(self, reference: Ref) -> Self::Output;
+}
+
+/// Defines a worker which can be given a handle to be capable of responding to the sender
+pub trait IntoDecodingWorker {
+    /// The type of worker which will be created
+    type Output: Send;
+    /// Give the worker a reference
+    fn with_decoder(self) -> Self::Output;
+}
+
+/// Defines a worker which can be given a handle to be capable of responding to the sender
+pub trait IntoRespondingWorker<R, H, O = Decoder>
 where
     R: SendRequestExt,
+    Self: Sized,
 {
     /// The type of worker which will be created
-    type Output: RespondingWorker<R, H, O> + RetryableWorker<R>;
+    type Output: Send;
     /// Give the worker a handle
-    fn with_handle(self: Box<Self>, handle: H) -> Box<Self::Output>;
+    fn with_handle(self, handle: H) -> Self::Output;
 }
 
 /// A worker which can respond to a sender
@@ -237,28 +290,41 @@ pub trait RespondingWorker<R, H, O>: Worker {
     fn handle(&self) -> &H;
 }
 
-impl<O> HandleResponse<O> for UnboundedSender<Result<O, WorkerError>> {
+impl<O, E, T> HandleResult<O, E> for UnboundedSender<T>
+where
+    T: From<Result<O, E>> + Send,
+{
     fn handle_response(self, response: O) -> anyhow::Result<()> {
-        self.send(Ok(response)).map_err(|e| anyhow!(e.to_string()))
+        self.send(T::from(Ok(response))).map_err(|e| anyhow!(e.to_string()))
+    }
+    fn handle_error(self, err: E) -> anyhow::Result<()> {
+        self.send(T::from(Err(err))).map_err(|e| anyhow!(e.to_string()))
     }
 }
 
-impl<O> HandleError for UnboundedSender<Result<O, WorkerError>> {
-    fn handle_error(self, worker_error: WorkerError) -> anyhow::Result<()> {
-        self.send(Err(worker_error)).map_err(|e| anyhow!(e.to_string()))
-    }
-}
-
-impl<O> HandleResponse<O> for tokio::sync::oneshot::Sender<Result<O, WorkerError>> {
+impl<O, E, T> HandleResult<O, E> for tokio::sync::oneshot::Sender<T>
+where
+    T: From<Result<O, E>> + Send,
+{
     fn handle_response(self, response: O) -> anyhow::Result<()> {
-        self.send(Ok(response)).map_err(|_| anyhow!("Failed to send response!"))
+        self.send(T::from(Ok(response)))
+            .map_err(|_| anyhow!("Failed to send response!"))
     }
-}
-
-impl<O> HandleError for tokio::sync::oneshot::Sender<Result<O, WorkerError>> {
-    fn handle_error(self, worker_error: WorkerError) -> anyhow::Result<()> {
-        self.send(Err(worker_error))
+    fn handle_error(self, err: E) -> anyhow::Result<()> {
+        self.send(T::from(Err(err)))
             .map_err(|_| anyhow!("Failed to send error response!"))
+    }
+}
+
+impl<O, E, T> HandleResult<O, E> for overclock::core::UnboundedHandle<T>
+where
+    T: From<Result<O, E>> + Send,
+{
+    fn handle_response(self, response: O) -> anyhow::Result<()> {
+        self.send(T::from(Ok(response))).map_err(|e| anyhow!(e.to_string()))
+    }
+    fn handle_error(self, err: E) -> anyhow::Result<()> {
+        self.send(T::from(Err(err))).map_err(|e| anyhow!(e.to_string()))
     }
 }
 
@@ -304,5 +370,3 @@ pub fn retry_send(keyspace: Option<&str>, mut r: RingSendError, mut retries: u8)
     }
     Ok(())
 }
-/// Provides atomic worker functionality
-pub mod atomic;
