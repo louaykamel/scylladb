@@ -8,7 +8,15 @@ use chrono::{
     Timelike,
 };
 use std::{
-    collections::HashMap,
+    collections::{
+        BTreeMap,
+        BTreeSet,
+        BinaryHeap,
+        HashMap,
+        HashSet,
+        LinkedList,
+        VecDeque,
+    },
     io::Cursor,
     net::{
         IpAddr,
@@ -336,6 +344,18 @@ where
     }
 }
 
+impl<E> ColumnEncoder for VecDeque<E>
+where
+    E: ColumnEncoder,
+{
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i32::to_be_bytes(self.len() as i32));
+        for e in self {
+            e.encode(buffer);
+        }
+    }
+}
+
 impl<K, V, S: ::std::hash::BuildHasher> ColumnEncoder for HashMap<K, V, S>
 where
     K: ColumnEncoder,
@@ -345,6 +365,68 @@ where
         buffer.extend(&i32::to_be_bytes(self.len() as i32));
         for (k, v) in self {
             k.encode(buffer);
+            v.encode(buffer);
+        }
+    }
+}
+
+impl<T> ColumnEncoder for HashSet<T>
+where
+    T: ColumnEncoder,
+{
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i32::to_be_bytes(self.len() as i32));
+        for v in self {
+            v.encode(buffer);
+        }
+    }
+}
+
+impl<K, V> ColumnEncoder for BTreeMap<K, V>
+where
+    K: ColumnEncoder,
+    V: ColumnEncoder,
+{
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i32::to_be_bytes(self.len() as i32));
+        for (k, v) in self {
+            k.encode(buffer);
+            v.encode(buffer);
+        }
+    }
+}
+
+impl<T> ColumnEncoder for BTreeSet<T>
+where
+    T: ColumnEncoder,
+{
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i32::to_be_bytes(self.len() as i32));
+        for v in self {
+            v.encode(buffer);
+        }
+    }
+}
+
+impl<T> ColumnEncoder for BinaryHeap<T>
+where
+    T: ColumnEncoder,
+{
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i32::to_be_bytes(self.len() as i32));
+        for v in self {
+            v.encode(buffer);
+        }
+    }
+}
+
+impl<T> ColumnEncoder for LinkedList<T>
+where
+    T: ColumnEncoder,
+{
+    fn encode_column(&self, buffer: &mut Vec<u8>) {
+        buffer.extend(&i32::to_be_bytes(self.len() as i32));
+        for v in self {
             v.encode(buffer);
         }
     }

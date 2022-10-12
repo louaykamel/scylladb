@@ -31,7 +31,15 @@ use chrono::{
     NaiveTime,
 };
 use std::{
-    collections::HashMap,
+    collections::{
+        BTreeMap,
+        BTreeSet,
+        BinaryHeap,
+        HashMap,
+        HashSet,
+        LinkedList,
+        VecDeque,
+    },
     convert::{
         TryFrom,
         TryInto,
@@ -650,6 +658,21 @@ where
     }
 }
 
+impl<E> ColumnDecoder for VecDeque<E>
+where
+    E: ColumnDecoder,
+{
+    fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
+        let list_len = i32::try_decode_column(reader)?;
+        let mut list: VecDeque<E> = VecDeque::new();
+        for _ in 0..list_len {
+            let item = E::try_decode(reader)?;
+            list.push_back(item);
+        }
+        Ok(list)
+    }
+}
+
 impl<K, V, S> ColumnDecoder for HashMap<K, V, S>
 where
     K: Eq + Hash + ColumnDecoder,
@@ -665,6 +688,83 @@ where
             map.insert(k, v);
         }
         Ok(map)
+    }
+}
+
+impl<K, V> ColumnDecoder for BTreeMap<K, V>
+where
+    K: Ord + ColumnDecoder,
+    V: ColumnDecoder,
+{
+    fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
+        let map_len = i32::try_decode_column(reader)?;
+        let mut map: BTreeMap<K, V> = BTreeMap::default();
+        for _ in 0..map_len {
+            let k = K::try_decode(reader)?;
+            let v = V::try_decode(reader)?;
+            map.insert(k, v);
+        }
+        Ok(map)
+    }
+}
+
+impl<E> ColumnDecoder for BTreeSet<E>
+where
+    E: Ord + ColumnDecoder,
+{
+    fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
+        let list_len = i32::try_decode_column(reader)?;
+        let mut list: BTreeSet<E> = BTreeSet::new();
+        for _ in 0..list_len {
+            let item = E::try_decode(reader)?;
+            list.insert(item);
+        }
+        Ok(list)
+    }
+}
+
+impl<E> ColumnDecoder for HashSet<E>
+where
+    E: Hash + Eq + ColumnDecoder,
+{
+    fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
+        let list_len = i32::try_decode_column(reader)?;
+        let mut list: HashSet<E> = HashSet::new();
+        for _ in 0..list_len {
+            let item = E::try_decode(reader)?;
+            list.insert(item);
+        }
+        Ok(list)
+    }
+}
+
+impl<E> ColumnDecoder for BinaryHeap<E>
+where
+    E: Ord + ColumnDecoder,
+{
+    fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
+        let list_len = i32::try_decode_column(reader)?;
+        let mut list: BinaryHeap<E> = BinaryHeap::new();
+        for _ in 0..list_len {
+            let item = E::try_decode(reader)?;
+            list.push(item);
+        }
+        Ok(list)
+    }
+}
+
+impl<E> ColumnDecoder for LinkedList<E>
+where
+    E: ColumnDecoder,
+{
+    fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
+        let list_len = i32::try_decode_column(reader)?;
+        let mut list: LinkedList<E> = LinkedList::new();
+        for _ in 0..list_len {
+            let item = E::try_decode(reader)?;
+            list.push_back(item);
+        }
+        Ok(list)
     }
 }
 
