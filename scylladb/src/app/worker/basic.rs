@@ -99,7 +99,7 @@ where
     ) -> anyhow::Result<()> {
         error!("{}", error);
         if let WorkerError::Cql(ref mut cql_error) = error {
-            if let (Some(id), Some(reporter)) = (cql_error.take_unprepared_id(), reporter_opt) {
+            if let (Some(id), Some(reporter)) = (cql_error.try_unprepared_id(), reporter_opt) {
                 handle_unprepared_error(self, id, reporter).map_err(|worker| {
                     error!(
                         "Error trying to reprepare query: {:?}",

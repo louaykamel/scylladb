@@ -110,6 +110,7 @@ async fn run_benchmark(n: i32) -> anyhow::Result<u128> {
             .build()?
             .worker()
             .with_handle(sender.clone())
+            .with_decoder()
             .send_local()?;
     }
     drop(sender);

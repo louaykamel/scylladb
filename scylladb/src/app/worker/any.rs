@@ -74,7 +74,7 @@ where
     fn handle_error(self: Box<Self>, mut error: WorkerError, reporter: Option<&ReporterHandle>) -> anyhow::Result<()> {
         error!("{}", error);
         if let WorkerError::Cql(ref mut cql_error) = error {
-            if let (Some(id), Some(reporter)) = (cql_error.take_unprepared_id(), reporter) {
+            if let (Some(id), Some(reporter)) = (cql_error.try_unprepared_id(), reporter) {
                 handle_unprepared_error(self, id, reporter).or_else(|worker| {
                     error!(
                         "Error trying to reprepare query: {:?}",

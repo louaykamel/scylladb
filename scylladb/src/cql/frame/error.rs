@@ -89,10 +89,10 @@ impl TryFrom<&mut Decoder> for CqlError {
 }
 
 impl CqlError {
-    /// Take the unprepared_id if the error is Unprepared error
-    pub fn take_unprepared_id(&mut self) -> Option<[u8; 16]> {
-        if let Some(Additional::Unprepared(Unprepared { id })) = self.additional.take() {
-            Some(id)
+    /// try copy unprepared_id if the error is Unprepared error
+    pub fn try_unprepared_id(&self) -> Option<[u8; 16]> {
+        if let Some(Additional::Unprepared(Unprepared { id })) = self.additional.as_ref() {
+            Some(*id)
         } else {
             None
         }
