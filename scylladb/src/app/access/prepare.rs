@@ -11,7 +11,7 @@ pub trait GetStaticPrepareRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -66,7 +66,7 @@ pub trait GetStaticPrepareRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -125,7 +125,7 @@ pub trait GetStaticPrepareRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -165,7 +165,12 @@ pub trait GetStaticPrepareRequest: Keyspace {
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
     ///     }
     ///
-    ///     fn bind_values<B: Binder>(builder: B, key: &MyKeyType, variables: &MyVarType, value: &MyValueType) -> B {
+    ///     fn bind_values<B: Binder>(
+    ///         builder: B,
+    ///         key: &MyKeyType,
+    ///         variables: &MyVarType,
+    ///         value: &MyValueType,
+    ///     ) -> B {
     ///         builder
     ///             .bind(&value.value1)
     ///             .value(&value.value2)
@@ -189,7 +194,7 @@ pub trait GetStaticPrepareRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -249,7 +254,7 @@ pub trait GetDynamicPrepareRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// "my_keyspace"
     ///     .prepare_with(parse_statement!("DELETE FROM my_table WHERE key = ?"))
     ///     .get_local_blocking()?;
@@ -269,7 +274,7 @@ pub trait AsDynamicPrepareRequest: Into<DataManipulationStatement> {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// parse_statement!("DELETE FROM my_keyspace.my_table WHERE key = ?")
     ///     .prepare()
     ///     .get_local_blocking()?;

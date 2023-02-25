@@ -7,7 +7,7 @@ use super::*;
 ///
 /// ## Example
 /// ```
-/// use scylla_rs::app::access::*;
+/// use scylladb::prelude::*;
 /// #[derive(Clone, Debug)]
 /// struct MyKeyspace {
 ///     pub name: String,
@@ -86,7 +86,7 @@ pub trait GetStaticInsertRequest<K, V>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -126,7 +126,10 @@ pub trait GetStaticInsertRequest<K, V>: Keyspace {
     ///     }
     ///
     ///     fn bind_values<B: Binder>(builder: B, key: &MyKeyType, values: &MyValueType) -> B {
-    ///         builder.value(key).value(&values.value1).value(&values.value2)
+    ///         builder
+    ///             .value(key)
+    ///             .value(&values.value1)
+    ///             .value(&values.value2)
     ///     }
     /// }
     /// # let (my_key, my_val) = (1, MyValueType::default());
@@ -156,7 +159,7 @@ pub trait GetStaticInsertRequest<K, V>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -196,7 +199,10 @@ pub trait GetStaticInsertRequest<K, V>: Keyspace {
     ///     }
     ///
     ///     fn bind_values<B: Binder>(builder: B, key: &MyKeyType, values: &MyValueType) -> B {
-    ///         builder.value(key).value(&values.value1).value(&values.value2)
+    ///         builder
+    ///             .value(key)
+    ///             .value(&values.value1)
+    ///             .value(&values.value2)
     ///     }
     /// }
     /// # let (my_key, my_val) = (1, MyValueType::default());
@@ -230,7 +236,7 @@ pub trait GetStaticInsertRequest<K, V>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -270,7 +276,10 @@ pub trait GetStaticInsertRequest<K, V>: Keyspace {
     ///     }
     ///
     ///     fn bind_values<B: Binder>(builder: B, key: &MyKeyType, values: &MyValueType) -> B {
-    ///         builder.value(key).value(&values.value1).value(&values.value2)
+    ///         builder
+    ///             .value(key)
+    ///             .value(&values.value1)
+    ///             .value(&values.value2)
     ///     }
     /// }
     /// # let (my_key, my_val) = (1, MyValueType::default());
@@ -309,7 +318,7 @@ pub trait GetDynamicInsertRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// "my_keyspace"
     ///     .insert_with(
     ///         parse_statement!("INSERT INTO my_table (key, val1, val2) VALUES (?,?,?)"),
@@ -347,7 +356,7 @@ pub trait GetDynamicInsertRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// "my_keyspace"
     ///     .insert_query_with(
     ///         parse_statement!("INSERT INTO my_table (key, val1, val2) VALUES (?,?,?)"),
@@ -388,7 +397,7 @@ pub trait GetDynamicInsertRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// "my_keyspace"
     ///     .insert_prepared_with(
     ///         parse_statement!("INSERT INTO my_table (key, val1, val2) VALUES (?,?,?)"),
@@ -436,7 +445,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// parse_statement!("INSERT INTO my_keyspace.my_table (key, val1, val2) VALUES (?,?,?)")
     ///     .as_insert(&[&3], &[&4.0, &5.0], StatementType::Prepared)
     ///     .consistency(Consistency::One)
@@ -467,7 +476,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// parse_statement!("INSERT INTO my_keyspace.my_table (key, val1, val2) VALUES (?,?,?)")
     ///     .as_insert_query(&[&3], &[&4.0, &5.0])
     ///     .consistency(Consistency::One)
@@ -492,7 +501,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// parse_statement!("INSERT INTO my_keyspace.my_table (key, val1, val2) VALUES (?,?,?)")
     ///     .as_insert_prepared(&[&3], &[&4.0, &5.0])
     ///     .consistency(Consistency::One)
@@ -754,7 +763,22 @@ impl<'a, S: Keyspace>
             _marker: self._marker,
         }
     }
-
+    pub fn build_lwt(self) -> anyhow::Result<LwtInsertRequest> {
+        let query = self
+            .builder
+            .consistency(Consistency::Quorum)
+            .bind_values()
+            .bind(self.key)
+            .bind(self.values)
+            .build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
     pub fn build(self) -> anyhow::Result<InsertRequest> {
         let query = self
             .builder
@@ -834,6 +858,22 @@ impl<'a, S: Keyspace>
         }
     }
 
+    pub fn build_lwt(self) -> anyhow::Result<LwtInsertRequest> {
+        let query = (self._marker.bind_fn)(
+            self.builder.consistency(Consistency::Quorum).bind_values(),
+            self.key,
+            self.values,
+        )
+        .build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
+
     pub fn build(self) -> anyhow::Result<InsertRequest> {
         let query = (self._marker.bind_fn)(
             self.builder.consistency(Consistency::Quorum).bind_values(),
@@ -865,6 +905,17 @@ impl<'a, S, K: ?Sized, V: ?Sized, T> InsertBuilder<'a, S, K, V, QueryValues, T> 
 }
 
 impl<'a, S, K: TokenEncoder + ?Sized, V: ?Sized, T> InsertBuilder<'a, S, K, V, QueryValues, T> {
+    pub fn build_lwt(self) -> anyhow::Result<LwtInsertRequest> {
+        let query = self.builder.build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
+
     pub fn build(self) -> anyhow::Result<InsertRequest> {
         let query = self.builder.build()?;
         // create the request
@@ -878,6 +929,17 @@ impl<'a, S, K: TokenEncoder + ?Sized, V: ?Sized, T> InsertBuilder<'a, S, K, V, Q
 }
 
 impl<'a, S, K: TokenEncoder + ?Sized, V: ?Sized, T> InsertBuilder<'a, S, K, V, QueryBuild, T> {
+    pub fn build_lwt(self) -> anyhow::Result<LwtInsertRequest> {
+        let query = self.builder.build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
+
     pub fn build(self) -> anyhow::Result<InsertRequest> {
         let query = self.builder.build()?;
         // create the request

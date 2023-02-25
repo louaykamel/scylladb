@@ -5,7 +5,7 @@ use super::*;
 ///
 /// ## Example
 /// ```
-/// use scylla_rs::app::access::*;
+/// use scylladb::prelude::*;
 /// #[derive(Clone, Debug)]
 /// struct MyKeyspace {
 ///     pub name: String,
@@ -77,7 +77,7 @@ pub trait GetStaticSelectRequest<K, V>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -147,7 +147,7 @@ pub trait GetStaticSelectRequest<K, V>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -217,7 +217,7 @@ pub trait GetStaticSelectRequest<K, V>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -292,7 +292,7 @@ pub trait GetDynamicSelectRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// let res: Option<f32> = "my_keyspace"
     ///     .select_with::<f32>(
     ///         parse_statement!("SELECT val FROM my_table where key = ? AND var = ?"),
@@ -331,7 +331,7 @@ pub trait GetDynamicSelectRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// let res: Option<f32> = "my_keyspace"
     ///     .select_query_with::<f32>(
     ///         parse_statement!("SELECT val FROM my_table where key = ? AND var = ?"),
@@ -373,7 +373,7 @@ pub trait GetDynamicSelectRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// let res: Option<f32> = "my_keyspace"
     ///     .select_prepared_with::<f32>(
     ///         parse_statement!("SELECT val FROM my_table where key = ? AND var = ?"),
@@ -422,12 +422,13 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
-    /// let res: Option<f32> = parse_statement!("SELECT val FROM my_keyspace.my_table where key = ? AND var = ?")
-    ///     .as_select::<f32>(&[&3], &[&"hello"], StatementType::Query)
-    ///     .consistency(Consistency::One)
-    ///     .build()?
-    ///     .get_local_blocking()?;
+    /// use scylladb::prelude::*;
+    /// let res: Option<f32> =
+    ///     parse_statement!("SELECT val FROM my_keyspace.my_table where key = ? AND var = ?")
+    ///         .as_select::<f32>(&[&3], &[&"hello"], StatementType::Query)
+    ///         .consistency(Consistency::One)
+    ///         .build()?
+    ///         .get_local_blocking()?;
     /// # Ok::<(), anyhow::Error>(())
     /// ```
     fn as_select<'a, O>(
@@ -454,12 +455,13 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
-    /// let res: Option<f32> = parse_statement!("SELECT val FROM my_keyspace.my_table where key = ? AND var = ?")
-    ///     .as_select_query::<f32>(&[&3], &[&"hello"])
-    ///     .consistency(Consistency::One)
-    ///     .build()?
-    ///     .get_local_blocking()?;
+    /// use scylladb::prelude::*;
+    /// let res: Option<f32> =
+    ///     parse_statement!("SELECT val FROM my_keyspace.my_table where key = ? AND var = ?")
+    ///         .as_select_query::<f32>(&[&3], &[&"hello"])
+    ///         .consistency(Consistency::One)
+    ///         .build()?
+    ///         .get_local_blocking()?;
     /// # Ok::<(), anyhow::Error>(())
     /// ```
     fn as_select_query<'a, O>(
@@ -480,12 +482,13 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
-    /// let res: Option<f32> = parse_statement!("SELECT val FROM my_keyspace.my_table where key = ? AND var = ?")
-    ///     .as_select_prepared::<f32>(&[&3], &[&"hello"])
-    ///     .consistency(Consistency::One)
-    ///     .build()?
-    ///     .get_local_blocking()?;
+    /// use scylladb::prelude::*;
+    /// let res: Option<f32> =
+    ///     parse_statement!("SELECT val FROM my_keyspace.my_table where key = ? AND var = ?")
+    ///         .as_select_prepared::<f32>(&[&3], &[&"hello"])
+    ///         .consistency(Consistency::One)
+    ///         .build()?
+    ///         .get_local_blocking()?;
     /// # Ok::<(), anyhow::Error>(())
     /// ```
     fn as_select_prepared<'a, O>(

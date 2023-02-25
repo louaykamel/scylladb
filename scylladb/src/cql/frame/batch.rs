@@ -41,7 +41,7 @@ pub enum BatchTypes {
 ///
 /// ## Example
 /// ```
-/// use scylla_rs::cql::{
+/// use scylladb::cql::{
 ///     Batch,
 ///     Consistency,
 ///     Statements,

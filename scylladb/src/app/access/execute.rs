@@ -13,7 +13,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// parse_statement!(
     ///     "CREATE KEYSPACE IF NOT EXISTS my_keyspace
     ///     WITH replication = {'class': 'NetworkTopologyStrategy', 'datacenter1': 1}
@@ -39,7 +39,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// parse_statement!(
     ///     "CREATE OR REPLACE AGGREGATE test.average(int)
     ///     SFUNC averageState

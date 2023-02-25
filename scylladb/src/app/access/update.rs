@@ -7,7 +7,10 @@ use super::*;
 ///
 /// ## Example
 /// ```
-/// use scylladb::app::access::*;
+/// use scylladb::{
+///     app::access::*,
+///     prelude::*,
+/// };
 /// #[derive(Clone, Debug)]
 /// struct MyKeyspace {
 ///     pub name: String,
@@ -52,7 +55,12 @@ use super::*;
 ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
 ///     }
 ///
-///     fn bind_values<B: Binder>(builder: B, key: &MyKeyType, variables: &MyVarType, value: &MyValueType) -> B {
+///     fn bind_values<B: Binder>(
+///         builder: B,
+///         key: &MyKeyType,
+///         variables: &MyVarType,
+///         value: &MyValueType,
+///     ) -> B {
 ///         builder.bind(value).value(key).value(variables)
 ///     }
 /// }
@@ -88,7 +96,10 @@ pub trait GetStaticUpdateRequest<K, V, U>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylladb::app::access::*;
+    /// use scylladb::{
+    ///     app::access::*,
+    ///     prelude::*,
+    /// };
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -128,7 +139,12 @@ pub trait GetStaticUpdateRequest<K, V, U>: Keyspace {
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
     ///     }
     ///
-    ///     fn bind_values<B: Binder>(builder: B, key: &MyKeyType, variables: &MyVarType, value: &MyValueType) -> B {
+    ///     fn bind_values<B: Binder>(
+    ///         builder: B,
+    ///         key: &MyKeyType,
+    ///         variables: &MyVarType,
+    ///         value: &MyValueType,
+    ///     ) -> B {
     ///         builder
     ///             .value(&value.value1)
     ///             .value(&value.value2)
@@ -169,7 +185,10 @@ pub trait GetStaticUpdateRequest<K, V, U>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylladb::app::access::*;
+    /// use scylladb::{
+    ///     app::access::*,
+    ///     prelude::*,
+    /// };
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -209,7 +228,12 @@ pub trait GetStaticUpdateRequest<K, V, U>: Keyspace {
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
     ///     }
     ///
-    ///     fn bind_values<B: Binder>(builder: B, key: &MyKeyType, variables: &MyVarType, value: &MyValueType) -> B {
+    ///     fn bind_values<B: Binder>(
+    ///         builder: B,
+    ///         key: &MyKeyType,
+    ///         variables: &MyVarType,
+    ///         value: &MyValueType,
+    ///     ) -> B {
     ///         builder
     ///             .value(&value.value1)
     ///             .value(&value.value2)
@@ -250,7 +274,10 @@ pub trait GetStaticUpdateRequest<K, V, U>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylladb::app::access::*;
+    /// use scylladb::{
+    ///     app::access::*,
+    ///     prelude::*,
+    /// };
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -290,7 +317,12 @@ pub trait GetStaticUpdateRequest<K, V, U>: Keyspace {
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
     ///     }
     ///
-    ///     fn bind_values<B: Binder>(builder: B, key: &MyKeyType, variables: &MyVarType, value: &MyValueType) -> B {
+    ///     fn bind_values<B: Binder>(
+    ///         builder: B,
+    ///         key: &MyKeyType,
+    ///         variables: &MyVarType,
+    ///         value: &MyValueType,
+    ///     ) -> B {
     ///         builder
     ///             .value(&value.value1)
     ///             .value(&value.value2)
@@ -336,7 +368,10 @@ pub trait GetDynamicUpdateRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylladb::app::access::*;
+    /// use scylladb::{
+    ///     app::access::*,
+    ///     prelude::*,
+    /// };
     /// "my_keyspace"
     ///     .update_with(
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?"),
@@ -375,7 +410,10 @@ pub trait GetDynamicUpdateRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylladb::app::access::*;
+    /// use scylladb::{
+    ///     app::access::*,
+    ///     prelude::*,
+    /// };
     /// "my_keyspace"
     ///     .update_query_with(
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?"),
@@ -418,7 +456,10 @@ pub trait GetDynamicUpdateRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylladb::app::access::*;
+    /// use scylladb::{
+    ///     app::access::*,
+    ///     prelude::*,
+    /// };
     /// "my_keyspace"
     ///     .update_prepared_with(
     ///         parse_statement!("UPDATE my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?"),
@@ -468,12 +509,17 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylladb::app::access::*;
-    /// parse_statement!("UPDATE my_keyspace.my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
-    ///     .as_update(&[&3], &[&4.0, &5.0], StatementType::Query)
-    ///     .consistency(Consistency::One)
-    ///     .build()?
-    ///     .get_local_blocking()?;
+    /// use scylladb::{
+    ///     app::access::*,
+    ///     prelude::*,
+    /// };
+    /// parse_statement!(
+    ///     "UPDATE my_keyspace.my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?"
+    /// )
+    /// .as_update(&[&3], &[&4.0, &5.0], StatementType::Query)
+    /// .consistency(Consistency::One)
+    /// .build()?
+    /// .get_local_blocking()?;
     /// # Ok::<(), anyhow::Error>(())
     /// ```
     fn as_update<'a>(
@@ -500,12 +546,17 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylladb::app::access::*;
-    /// parse_statement!("UPDATE my_keyspace.my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
-    ///     .as_update_query(&[&3], &[&4.0, &5.0])
-    ///     .consistency(Consistency::One)
-    ///     .build()?
-    ///     .get_local_blocking()?;
+    /// use scylladb::{
+    ///     app::access::*,
+    ///     prelude::*,
+    /// };
+    /// parse_statement!(
+    ///     "UPDATE my_keyspace.my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?"
+    /// )
+    /// .as_update_query(&[&3], &[&4.0, &5.0])
+    /// .consistency(Consistency::One)
+    /// .build()?
+    /// .get_local_blocking()?;
     /// # Ok::<(), anyhow::Error>(())
     /// ```
     fn as_update_query<'a>(
@@ -526,12 +577,17 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylladb::app::access::*;
-    /// parse_statement!("UPDATE my_keyspace.my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?")
-    ///     .as_update_prepared(&[&3], &[&4.0, &5.0])
-    ///     .consistency(Consistency::One)
-    ///     .build()?
-    ///     .get_local_blocking()?;
+    /// use scylladb::{
+    ///     app::access::*,
+    ///     prelude::*,
+    /// };
+    /// parse_statement!(
+    ///     "UPDATE my_keyspace.my_table SET val1 = ?, val2 = ? WHERE key = ? AND var = ?"
+    /// )
+    /// .as_update_prepared(&[&3], &[&4.0, &5.0])
+    /// .consistency(Consistency::One)
+    /// .build()?
+    /// .get_local_blocking()?;
     /// # Ok::<(), anyhow::Error>(())
     /// ```
     fn as_update_prepared<'a>(
@@ -645,6 +701,23 @@ impl<'a, S: Update<K, V, U>, K: TokenEncoder, V, U> UpdateBuilder<'a, S, K, V, U
             .timestamp(timestamp),
             _marker: self._marker,
         }
+    }
+
+    pub fn build_lwt(self) -> anyhow::Result<LwtUpdateRequest> {
+        let query = S::bind_values(
+            self.builder.consistency(Consistency::Quorum).bind_values(),
+            &self.key,
+            &self.variables,
+            &self.values,
+        )
+        .build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
     }
 
     pub fn build(self) -> anyhow::Result<UpdateRequest> {
@@ -766,6 +839,23 @@ impl<'a, S: Keyspace>
         }
     }
 
+    pub fn build_lwt(self) -> anyhow::Result<LwtUpdateRequest> {
+        let query = self
+            .builder
+            .consistency(Consistency::Quorum)
+            .bind_values()
+            .bind(self.variables)
+            .bind(self.key)
+            .build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
+
     pub fn build(self) -> anyhow::Result<UpdateRequest> {
         let query = self
             .builder
@@ -849,7 +939,21 @@ impl<'a, S: Keyspace>
             _marker: DynamicRequest,
         }
     }
-
+    pub fn build_lwt(self) -> anyhow::Result<LwtUpdateRequest> {
+        let query = (self._marker.bind_fn)(
+            self.builder.consistency(Consistency::Quorum).bind_values(),
+            self.key,
+            self.variables,
+        )
+        .build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
     pub fn build(self) -> anyhow::Result<UpdateRequest> {
         let query = (self._marker.bind_fn)(
             self.builder.consistency(Consistency::Quorum).bind_values(),
@@ -880,6 +984,17 @@ impl<'a, S, K: TokenEncoder + ?Sized, V: ?Sized, U: ?Sized, T> UpdateBuilder<'a,
         }
     }
 
+    pub fn build_lwt(self) -> anyhow::Result<LwtUpdateRequest> {
+        let query = self.builder.build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
+
     pub fn build(self) -> anyhow::Result<UpdateRequest> {
         let query = self.builder.build()?;
         // create the request
@@ -893,6 +1008,16 @@ impl<'a, S, K: TokenEncoder + ?Sized, V: ?Sized, U: ?Sized, T> UpdateBuilder<'a,
 }
 
 impl<'a, S, K: TokenEncoder + ?Sized, V: ?Sized, U: ?Sized, T> UpdateBuilder<'a, S, K, V, U, QueryBuild, T> {
+    pub fn build_lwt(self) -> anyhow::Result<LwtUpdateRequest> {
+        let query = self.builder.build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
     pub fn build(self) -> anyhow::Result<UpdateRequest> {
         let query = self.builder.build()?;
         // create the request
@@ -958,6 +1083,67 @@ impl Request for UpdateRequest {
 
 impl SendRequestExt for UpdateRequest {
     type Marker = DecodeVoid;
+    type Worker = BasicRetryWorker<Self>;
+    const TYPE: RequestType = RequestType::Update;
+
+    fn worker(self) -> Box<Self::Worker> {
+        BasicRetryWorker::new(self)
+    }
+}
+
+/// A request to Lwt update a record which can be sent to the ring
+#[derive(Debug, Clone)]
+pub struct LwtUpdateRequest(CommonRequest);
+
+impl From<CommonRequest> for LwtUpdateRequest {
+    fn from(req: CommonRequest) -> Self {
+        LwtUpdateRequest(req)
+    }
+}
+
+impl From<LwtUpdateRequest> for CommonRequest {
+    fn from(req: LwtUpdateRequest) -> Self {
+        req.0
+    }
+}
+
+impl Deref for LwtUpdateRequest {
+    type Target = CommonRequest;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for LwtUpdateRequest {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Request for LwtUpdateRequest {
+    fn token(&self) -> i64 {
+        self.0.token()
+    }
+
+    fn statement(&self) -> Statement {
+        self.0.statement()
+    }
+
+    fn statement_by_id(&self, id: &[u8; 16]) -> Option<DataManipulationStatement> {
+        self.0.statement_by_id(id)
+    }
+
+    fn payload(&self) -> Vec<u8> {
+        self.0.payload()
+    }
+    fn keyspace(&self) -> Option<String> {
+        self.0.keyspace()
+    }
+}
+
+impl SendRequestExt for LwtUpdateRequest {
+    type Marker = DecodeLwt;
     type Worker = BasicRetryWorker<Self>;
     const TYPE: RequestType = RequestType::Update;
 

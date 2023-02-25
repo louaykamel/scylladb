@@ -82,7 +82,7 @@ use std::collections::HashMap;
 /// #         binder.value(key)
 /// #     }
 /// # }
-/// use scylla_rs::app::access::*;
+/// use scylladb::prelude::*;
 ///
 /// # let keyspace = MyKeyspace::new();
 /// # let (my_key, my_val, token_key) = (1, 1.0, 1);
@@ -558,6 +558,15 @@ impl<'a, S: Keyspace, Type: Copy + Into<u8>> BatchCollector<'a, S, Type, BatchVa
             self.keyspace,
         )
     }
+    /// Build the LWT batch request using the current collector
+    pub fn build_lwt(self) -> anyhow::Result<LwtBatchRequest> {
+        Ok(LwtBatchRequest {
+            token: rand::random(),
+            map: self.map,
+            payload: self.builder.consistency(Consistency::Quorum).build()?.0.into(),
+            keyspace: self.keyspace.name().into(),
+        })
+    }
     /// Build the batch request using the current collector
     pub fn build(self) -> anyhow::Result<BatchRequest> {
         Ok(BatchRequest {
@@ -578,6 +587,15 @@ impl<'a, S: Keyspace, Type: Copy + Into<u8>> BatchCollector<'a, S, Type, BatchFl
     pub fn timestamp(self, timestamp: i64) -> BatchCollector<'a, S, Type, BatchBuild> {
         Self::step(self.builder.timestamp(timestamp), self.map, self.keyspace)
     }
+    /// Build the LWT batch request using the current collector
+    pub fn build_lwt(self) -> anyhow::Result<LwtBatchRequest> {
+        Ok(LwtBatchRequest {
+            token: rand::random(),
+            map: self.map,
+            payload: self.builder.build()?.0.into(),
+            keyspace: self.keyspace.name().into(),
+        })
+    }
     /// Build the batch request using the current collector
     pub fn build(self) -> anyhow::Result<BatchRequest> {
         Ok(BatchRequest {
@@ -595,6 +613,15 @@ impl<'a, S: Keyspace, Type: Copy + Into<u8>> BatchCollector<'a, S, Type, BatchTi
         Self::step(self.builder.timestamp(timestamp), self.map, self.keyspace)
     }
     /// Build the batch request using the current collector
+    pub fn build_lwt(self) -> anyhow::Result<LwtBatchRequest> {
+        Ok(LwtBatchRequest {
+            token: rand::random(),
+            map: self.map,
+            payload: self.builder.build()?.0.into(),
+            keyspace: self.keyspace.name().into(),
+        })
+    }
+    /// Build the batch request using the current collector
     pub fn build(self) -> anyhow::Result<BatchRequest> {
         Ok(BatchRequest {
             token: rand::random(),
@@ -606,6 +633,15 @@ impl<'a, S: Keyspace, Type: Copy + Into<u8>> BatchCollector<'a, S, Type, BatchTi
 }
 
 impl<'a, S: Keyspace, Type: Copy + Into<u8>> BatchCollector<'a, S, Type, BatchBuild> {
+    /// Build the LWT batch request using the current collector
+    pub fn build_lwt(self) -> anyhow::Result<LwtBatchRequest> {
+        Ok(LwtBatchRequest {
+            token: rand::random(),
+            map: self.map,
+            payload: self.builder.build()?.0.into(),
+            keyspace: self.keyspace.name().into(),
+        })
+    }
     /// Build the batch request using the current collector
     pub fn build(self) -> anyhow::Result<BatchRequest> {
         Ok(BatchRequest {
@@ -686,6 +722,81 @@ impl SendRequestExt for BatchRequest {
 }
 
 impl BatchRequest {
+    /// Compute the murmur3 token from the provided K
+    pub fn compute_token<K>(mut self, key: &K) -> Self
+    where
+        K: TokenEncoder,
+    {
+        self.token = key.token();
+        self
+    }
+
+    /// Clone the cql map
+    pub fn clone_map(&self) -> HashMap<[u8; 16], ModificationStatement> {
+        self.map.clone()
+    }
+
+    /// Take the cql map, leaving an empty map in the request
+    pub fn take_map(&mut self) -> HashMap<[u8; 16], ModificationStatement> {
+        std::mem::take(&mut self.map)
+    }
+
+    /// Get a statement given an id from the request's map
+    pub fn get_statement(&self, id: &[u8; 16]) -> Option<&ModificationStatement> {
+        self.map.get(id)
+    }
+
+    /// Get a basic worker for this request
+    pub fn worker(self) -> Box<BasicRetryWorker<Self>> {
+        BasicRetryWorker::new(self)
+    }
+}
+
+/// A LWT Batch request, which can be used to send queries to the Ring.
+/// Stores a map of prepared statement IDs that were added to the
+/// batch so that the associated statements can be re-prepared if necessary.
+#[derive(Clone, Debug)]
+pub struct LwtBatchRequest {
+    token: i64,
+    payload: Vec<u8>,
+    map: HashMap<[u8; 16], ModificationStatement>,
+    keyspace: Option<String>,
+}
+
+impl Request for LwtBatchRequest {
+    fn token(&self) -> i64 {
+        self.token
+    }
+
+    fn statement(&self) -> Statement {
+        panic!("Must use `get_statement` on batch requests!")
+    }
+
+    fn statement_by_id(&self, id: &[u8; 16]) -> Option<DataManipulationStatement> {
+        self.map.get(id).map(|s| s.clone().into())
+    }
+
+    fn payload(&self) -> Vec<u8> {
+        self.payload.clone()
+    }
+
+    fn keyspace(&self) -> Option<String> {
+        self.keyspace.clone()
+    }
+}
+
+impl SendRequestExt for LwtBatchRequest {
+    type Marker = DecodeLwt;
+    type Worker = BasicRetryWorker<Self>;
+    const TYPE: RequestType = RequestType::Batch;
+
+    fn worker(self) -> Box<Self::Worker> {
+        BasicRetryWorker::new(self)
+    }
+}
+
+#[allow(unused)]
+impl LwtBatchRequest {
     /// Compute the murmur3 token from the provided K
     pub fn compute_token<K>(mut self, key: &K) -> Self
     where

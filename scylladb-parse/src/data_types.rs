@@ -1232,7 +1232,8 @@ impl Parse for DateLiteral {
     type Output = Self;
     fn parse(s: &mut StatementStream<'_>) -> anyhow::Result<Self::Output> {
         if let Some(d) = s.parse::<Option<LitStr>>()? {
-            let dur = d.value.parse::<NaiveDate>().map_err(|e| anyhow::anyhow!(e))? - NaiveDate::from_ymd(1970, 1, 1);
+            let dur = d.value.parse::<NaiveDate>().map_err(|e| anyhow::anyhow!(e))?
+                - NaiveDate::from_ymd_opt(1970, 1, 1).ok_or(anyhow::anyhow!("Out of range ymd"))?;
             Ok(Self(dur.num_days() as u32 + (1u32 << 31)))
         } else {
             Ok(Self(s.parse::<u32>()?))
@@ -1246,7 +1247,8 @@ impl Parse for TimeLiteral {
     type Output = Self;
     fn parse(s: &mut StatementStream<'_>) -> anyhow::Result<Self::Output> {
         if let Some(t) = s.parse::<Option<LitStr>>()? {
-            let t = t.value.parse::<NaiveTime>().map_err(|e| anyhow::anyhow!(e))? - NaiveTime::from_hms(0, 0, 0);
+            let t = t.value.parse::<NaiveTime>().map_err(|e| anyhow::anyhow!(e))?
+                - NaiveTime::from_hms_opt(0, 0, 0).ok_or(anyhow::anyhow!("Out of range hms"))?;
             Ok(Self(
                 t.num_nanoseconds()
                     .ok_or_else(|| anyhow::anyhow!("Invalid time literal!"))?,

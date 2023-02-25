@@ -7,7 +7,7 @@ use super::*;
 ///
 /// ## Example
 /// ```
-/// use scylla_rs::app::access::*;
+/// use scylladb::prelude::*;
 /// #[derive(Clone, Debug)]
 /// struct MyKeyspace {
 ///     pub name: String,
@@ -79,7 +79,7 @@ pub trait GetStaticDeleteRequest<K, V>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -149,7 +149,7 @@ pub trait GetStaticDeleteRequest<K, V>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -219,7 +219,7 @@ pub trait GetStaticDeleteRequest<K, V>: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// #[derive(Clone, Debug)]
     /// struct MyKeyspace {
     ///     pub name: String,
@@ -293,7 +293,7 @@ pub trait GetDynamicDeleteRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// "my_keyspace"
     ///     .delete_with(
     ///         parse_statement!("DELETE FROM my_table WHERE key = ? AND var = ?"),
@@ -332,7 +332,7 @@ pub trait GetDynamicDeleteRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// "my_keyspace"
     ///     .delete_query_with(
     ///         parse_statement!("DELETE FROM my_table WHERE key = ? AND var = ?"),
@@ -374,7 +374,7 @@ pub trait GetDynamicDeleteRequest: Keyspace {
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// "my_keyspace"
     ///     .delete_prepared_with(
     ///         parse_statement!("DELETE FROM my_table WHERE key = ? AND var = ?"),
@@ -422,7 +422,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// parse_statement!("DELETE FROM my_keyspace.my_table WHERE key = ? AND var = ?")
     ///     .as_delete(&[&3], &[&"hello"], StatementType::Prepared)
     ///     .consistency(Consistency::One)
@@ -454,7 +454,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// parse_statement!("DELETE FROM my_keyspace.my_table WHERE key = ? AND var = ?")
     ///     .as_delete_query(&[&3], &[&"hello"])
     ///     .consistency(Consistency::One)
@@ -480,7 +480,7 @@ where
     ///
     /// ## Example
     /// ```no_run
-    /// use scylla_rs::app::access::*;
+    /// use scylladb::prelude::*;
     /// parse_statement!("DELETE FROM my_keyspace.my_table WHERE key = ? AND var = ?")
     ///     .as_delete_prepared(&[&3], &[&"hello"])
     ///     .consistency(Consistency::One)
@@ -594,6 +594,22 @@ impl<'a, S: Delete<K, V, D>, K: TokenEncoder, V, D> DeleteBuilder<'a, S, K, V, D
         }
     }
 
+    pub fn build_lwt(self) -> anyhow::Result<LwtDeleteRequest> {
+        let query = S::bind_values(
+            self.builder.consistency(Consistency::Quorum).bind_values(),
+            &self.key,
+            &self.variables,
+        )
+        .build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
+
     pub fn build(self) -> anyhow::Result<DeleteRequest> {
         let query = S::bind_values(
             self.builder.consistency(Consistency::Quorum).bind_values(),
@@ -670,7 +686,21 @@ impl<'a, S: Keyspace, D>
             _marker: self._marker,
         }
     }
-
+    pub fn build_lwt(self) -> anyhow::Result<LwtDeleteRequest> {
+        let query = self
+            .builder
+            .consistency(Consistency::Quorum)
+            .bind_values()
+            .bind(self.key)
+            .build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
     pub fn build(self) -> anyhow::Result<DeleteRequest> {
         let query = self
             .builder
@@ -702,6 +732,16 @@ impl<'a, S, K: ?Sized, V: ?Sized, D, T> DeleteBuilder<'a, S, K, V, D, QueryValue
 }
 
 impl<'a, S, K: TokenEncoder + ?Sized, V: ?Sized, D, T> DeleteBuilder<'a, S, K, V, D, QueryValues, T> {
+    pub fn build_lwt(self) -> anyhow::Result<LwtDeleteRequest> {
+        let query = self.builder.build()?;
+        // create the request
+        Ok(CommonRequest {
+            token: self.key.token(),
+            payload: query.into(),
+            statement: self.statement.into(),
+        }
+        .into())
+    }
     pub fn build(self) -> anyhow::Result<DeleteRequest> {
         let query = self.builder.build()?;
         // create the request
@@ -780,6 +820,67 @@ impl Request for DeleteRequest {
 
 impl SendRequestExt for DeleteRequest {
     type Marker = DecodeVoid;
+    type Worker = BasicRetryWorker<Self>;
+    const TYPE: RequestType = RequestType::Delete;
+
+    fn worker(self) -> Box<Self::Worker> {
+        BasicRetryWorker::new(self)
+    }
+}
+
+/// A request to Lwt delete a record which can be sent to the ring
+#[derive(Debug, Clone)]
+pub struct LwtDeleteRequest(CommonRequest);
+
+impl From<CommonRequest> for LwtDeleteRequest {
+    fn from(req: CommonRequest) -> Self {
+        LwtDeleteRequest(req)
+    }
+}
+
+impl From<LwtDeleteRequest> for CommonRequest {
+    fn from(req: LwtDeleteRequest) -> Self {
+        req.0
+    }
+}
+
+impl Deref for LwtDeleteRequest {
+    type Target = CommonRequest;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for LwtDeleteRequest {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Request for LwtDeleteRequest {
+    fn token(&self) -> i64 {
+        self.0.token()
+    }
+
+    fn statement(&self) -> Statement {
+        self.0.statement()
+    }
+
+    fn statement_by_id(&self, id: &[u8; 16]) -> Option<DataManipulationStatement> {
+        self.0.statement_by_id(id)
+    }
+
+    fn payload(&self) -> Vec<u8> {
+        self.0.payload()
+    }
+    fn keyspace(&self) -> Option<String> {
+        self.0.keyspace()
+    }
+}
+
+impl SendRequestExt for LwtDeleteRequest {
+    type Marker = DecodeLwt;
     type Worker = BasicRetryWorker<Self>;
     const TYPE: RequestType = RequestType::Delete;
 

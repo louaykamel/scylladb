@@ -31,7 +31,7 @@ const QUERY_HEADER: &'static [u8] = &[4, 0, 0, 0, QUERY, 0, 0, 0, 0];
 ///
 /// ## Example
 /// ```
-/// use scylla_rs::cql::{
+/// use scylladb::cql::{
 ///     Binder,
 ///     Consistency,
 ///     Query,

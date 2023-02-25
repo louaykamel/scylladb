@@ -17,9 +17,10 @@ where
 ///
 /// # Example
 /// ```
-/// use scylla_rs::cql::murmur3_cassandra_x64_128;
+/// use scylladb::cql::murmur3_cassandra_x64_128;
 /// let hash_pair = murmur3_cassandra_x64_128(
-///     "EHUHSJRCMDJSZUQMNLDBSRFC9O9XCI9SMHFWWHNDYOOOWMSOJQHCC9GFUEGECEVVXCSXYTHSRJ9TZ9999".as_bytes(),
+///     "EHUHSJRCMDJSZUQMNLDBSRFC9O9XCI9SMHFWWHNDYOOOWMSOJQHCC9GFUEGECEVVXCSXYTHSRJ9TZ9999"
+///         .as_bytes(),
 ///     0,
 /// );
 /// ```

@@ -1,6 +1,12 @@
 //! This module defines the row/column decoder/encoder for the frame structure.
 
+use std::{
+    borrow::BorrowMut,
+    collections::HashMap,
+};
+
 use super::{
+    decoder::string,
     ColumnDecoder,
     Frame,
 };
@@ -32,6 +38,14 @@ impl Flags {
     pub fn has_more_pages(&self) -> bool {
         self.has_more_pages
     }
+    /// Check if no_metadata is set.
+    pub fn no_metadata(&self) -> bool {
+        self.no_metadata
+    }
+    /// Check if global_table_spec exist.
+    pub fn global_table_spec(&self) -> bool {
+        self.global_table_spec
+    }
 }
 #[derive(Debug, Clone)]
 /// The pageing state of the response.
@@ -44,6 +58,204 @@ impl PagingState {
         PagingState { paging_state }
     }
 }
+
+#[derive(Debug, Clone)]
+/// Global Table spec
+pub struct TableSpec {
+    keyspace: String,
+    table_name: String,
+}
+
+impl TableSpec {
+    pub(super) fn new(keyspace: String, table_name: String) -> Self {
+        Self { keyspace, table_name }
+    }
+    /// Returns the keyspace name
+    pub fn keyspace(&self) -> &String {
+        &self.keyspace
+    }
+    /// Returns the table name
+    pub fn table_name(&self) -> &String {
+        &self.table_name
+    }
+}
+
+#[derive(Debug, Clone)]
+/// The column spec
+pub struct ColumnSpec {
+    /// The global table spec avaliable if flag is not set
+    table_spec: Option<TableSpec>,
+    /// Column name
+    col_name: String,
+    /// Column type
+    col_type: ColType,
+}
+
+impl ColumnSpec {
+    /// Create new column spec
+    pub(super) fn new(table_spec: Option<TableSpec>, col_name: String, col_type: ColType) -> Self {
+        Self {
+            table_spec,
+            col_name,
+            col_type,
+        }
+    }
+    /// Returns the table spec
+    pub fn table_spec(&self) -> Option<&TableSpec> {
+        self.table_spec.as_ref()
+    }
+    /// Returns the column name
+    pub fn col_name(&self) -> &String {
+        &self.col_name
+    }
+    /// Returns the column type
+    pub fn col_type(&self) -> &ColType {
+        &self.col_type
+    }
+}
+#[derive(Debug, Clone)]
+/// The cql column type
+pub enum ColType {
+    /// Custom cql column type
+    Custom(String),
+    /// Ascii cql column type
+    Ascii,
+    /// Bigint cql column type
+    Bigint,
+    /// Blob cql column type
+    Blob,
+    /// Bool cql column type
+    Boolean,
+    /// Counter cql column type
+    Counter,
+    /// Decimal cql column type
+    Decimal,
+    /// Double cql column type
+    Double,
+    /// Float cql column type
+    Float,
+    /// Int cql column type
+    Int,
+    /// Timestamp cql column type
+    Timestamp,
+    /// UUID cql column type
+    Uuid,
+    /// Varchar cql column type
+    Varchar,
+    /// Varint cql column type
+    Varint,
+    /// TimeUuid cql column type
+    Timeuuid,
+    /// Inet cql column type
+    Inet,
+    /// Date cql column type
+    Date,
+    /// Time cql column type
+    Time,
+    /// SmallInt cql column type
+    Smallint,
+    /// Tinyint cql column type
+    Tinyint,
+    /// List cql column type
+    List {
+        /// The list elements type
+        element: Box<ColType>,
+    },
+    /// Map collection cql column type
+    Map {
+        /// The map key type
+        key: Box<ColType>,
+        /// The map value key type
+        value: Box<ColType>,
+    },
+    /// Set cql column type
+    Set {
+        /// The Set elements type
+        element: Box<ColType>,
+    },
+    /// User defined cql column type
+    Udt {
+        /// keyspace name this UDT is part of.
+        ks: String,
+        /// UDT name
+        udt_name: String,
+        /// UDT Fields where key is the name and value is the type
+        fields: HashMap<String, ColType>,
+    },
+    /// Tuple cql column type
+    Tuple {
+        /// The Tuple elements type
+        elements: Vec<ColType>,
+    },
+}
+
+impl TryFrom<&mut std::io::Cursor<Vec<u8>>> for ColType {
+    type Error = anyhow::Error;
+
+    fn try_from(reader: &mut std::io::Cursor<Vec<u8>>) -> Result<Self, Self::Error> {
+        let option_id = u16::try_decode_column(reader)?;
+        match option_id {
+            0 => Ok(Self::Custom(string(reader.borrow_mut())?)),
+            1 => Ok(Self::Ascii),
+            2 => Ok(Self::Bigint),
+            3 => Ok(Self::Blob),
+            4 => Ok(Self::Boolean),
+            5 => Ok(Self::Counter),
+            6 => Ok(Self::Decimal),
+            7 => Ok(Self::Double),
+            8 => Ok(Self::Float),
+            9 => Ok(Self::Int),
+            11 => Ok(Self::Timestamp),
+            12 => Ok(Self::Uuid),
+            13 => Ok(Self::Varchar),
+            14 => Ok(Self::Varint),
+            15 => Ok(Self::Timeuuid),
+            16 => Ok(Self::Inet),
+            17 => Ok(Self::Date),
+            18 => Ok(Self::Time),
+            19 => Ok(Self::Smallint),
+            20 => Ok(Self::Tinyint),
+            32 => Ok(Self::List {
+                element: Box::new(Self::try_from(reader.borrow_mut())?),
+            }),
+            33 => Ok(Self::Map {
+                key: Box::new(Self::try_from(reader.borrow_mut())?),
+                value: Box::new(Self::try_from(reader.borrow_mut())?),
+            }),
+            34 => Ok(Self::Set {
+                element: Box::new(Self::try_from(reader.borrow_mut())?),
+            }),
+            48 => Ok(Self::Udt {
+                ks: string(reader.borrow_mut())?,
+                udt_name: string(reader.borrow_mut())?,
+                fields: {
+                    let mut fields = HashMap::new();
+                    let n = u16::try_decode_column(reader.borrow_mut())?;
+                    for _ in 0..n {
+                        let field_name = string(reader.borrow_mut())?;
+                        let field_type = Self::try_from(reader.borrow_mut())?;
+                        fields.insert(field_name, field_type);
+                    }
+                    fields
+                },
+            }),
+            49 => Ok(Self::Tuple {
+                elements: {
+                    let mut tuple = Vec::new();
+                    let n = u16::try_decode_column(reader.borrow_mut())?;
+                    for _ in 0..n {
+                        let ele_type = Self::try_from(reader.borrow_mut())?;
+                        tuple.push(ele_type);
+                    }
+                    tuple.reverse();
+                    tuple
+                },
+            }),
+            _ => anyhow::bail!("Invalid option coltype id"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 /// The meta structure of the row.
 pub struct Metadata {
@@ -51,16 +263,34 @@ pub struct Metadata {
     #[allow(unused)]
     columns_count: ColumnsCount,
     paging_state: PagingState,
+    global_table_spec: Option<TableSpec>,
+    columns_specs: Vec<ColumnSpec>,
 }
 
 impl Metadata {
     /// Create a new meta data.
-    pub fn new(flags: Flags, columns_count: ColumnsCount, paging_state: PagingState) -> Self {
+    pub fn new(
+        flags: Flags,
+        columns_count: ColumnsCount,
+        paging_state: PagingState,
+        global_table_spec: Option<TableSpec>,
+        columns_specs: Vec<ColumnSpec>,
+    ) -> Self {
         Metadata {
             flags,
             columns_count,
             paging_state,
+            global_table_spec,
+            columns_specs,
         }
+    }
+    /// Returns the global spec (only if flag is set)
+    pub fn global_table_spec(&self) -> Option<&TableSpec> {
+        self.global_table_spec.as_ref()
+    }
+    /// Returns the column specs
+    pub fn column_specs(&self) -> &Vec<ColumnSpec> {
+        &self.columns_specs
     }
     /// Take the paging state of the metadata.
     pub fn take_paging_state(&mut self) -> Option<Vec<u8>> {
@@ -93,7 +323,7 @@ pub trait Row: Sized {
         Iter::new(decoder)
     }
     /// Define how to decode the row
-    fn try_decode_row<R: Rows + ColumnValue>(rows: &mut R) -> anyhow::Result<Self>
+    fn try_decode_row<R: ColumnValue>(rows: &mut R) -> anyhow::Result<Self>
     where
         Self: Sized;
 }
@@ -102,7 +332,7 @@ impl<T> Row for T
 where
     T: ColumnDecoder,
 {
-    fn try_decode_row<R: Rows + ColumnValue>(rows: &mut R) -> anyhow::Result<Self>
+    fn try_decode_row<R: ColumnValue>(rows: &mut R) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
@@ -123,7 +353,7 @@ pub struct ColumnIter<T> {
     decoder: super::Decoder,
     rows_count: usize,
     remaining_rows_count: usize,
-    remaining_column_count: usize,
+    remaining_columns_count: usize,
     metadata: Metadata,
     _marker: std::marker::PhantomData<T>,
 }
@@ -134,23 +364,15 @@ pub struct ColumnIter<T> {
 pub struct AnyIter {
     decoder: super::Decoder,
     rows_count: usize,
-    remaining_rows_count: usize,
-    remaining_column_count: usize,
+    remaining_total_columns_count: usize,
     metadata: Metadata,
 }
 
 impl AnyIter {
-    /// Iterates the next column value
-    pub fn next<T: ColumnDecoder>(&mut self) -> Option<T> {
-        if self.remaining_rows_count > 0 {
-            if self.remaining_column_count > 0 {
-                self.remaining_column_count -= 1;
-                Some(self.column_value::<T>().unwrap())
-            } else {
-                self.remaining_column_count = self.metadata.columns_count as usize;
-                self.remaining_rows_count -= 1;
-                self.next()
-            }
+    /// Iterates the next column value or row
+    pub fn next<T: Row>(&mut self) -> Option<T> {
+        if self.remaining_total_columns_count > 0 {
+            T::try_decode_row(self).map_err(|e| error!("{}", e)).ok()
         } else {
             None
         }
@@ -164,8 +386,7 @@ impl AnyIter {
             decoder,
             metadata,
             rows_count: rows_count as usize,
-            remaining_rows_count: rows_count as usize,
-            remaining_column_count: columns_count as usize,
+            remaining_total_columns_count: (columns_count * rows_count) as usize,
         })
     }
     /// Take the paging state
@@ -181,10 +402,17 @@ impl AnyIter {
     pub fn rows_count(&self) -> usize {
         self.rows_count
     }
-    /// Get the iterator remaining rows count
-    pub fn remaining_rows_count(&self) -> usize {
-        self.remaining_rows_count
+
+    /// Get the iterator remaining total columns count
+    pub fn remaining_total_columns_count(&self) -> usize {
+        self.remaining_total_columns_count
     }
+
+    /// Get the columns count
+    pub fn columns_count(&self) -> usize {
+        self.metadata.columns_count as usize
+    }
+
     /// Check if it has more pages to request
     pub fn has_more_pages(&self) -> bool {
         self.metadata.has_more_pages()
@@ -220,7 +448,7 @@ impl<T: ColumnDecoder> Rows for ColumnIter<T> {
             metadata,
             rows_count: rows_count as usize,
             remaining_rows_count: rows_count as usize,
-            remaining_column_count: columns_count as usize,
+            remaining_columns_count: columns_count as usize,
             _marker: std::marker::PhantomData,
         })
     }
@@ -293,11 +521,10 @@ impl<T: ColumnDecoder> Iterator for ColumnIter<T> {
     /// Note the row decoder is implemented in this `next` method of HardCodedSpecs.
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         if self.remaining_rows_count > 0 {
-            if self.remaining_column_count > 0 {
-                self.remaining_column_count -= 1;
-                Some(self.column_value::<T>().unwrap())
+            if self.remaining_columns_count > 0 {
+                self.column_value::<T>().map_err(|e| error!("{}", e)).ok()
             } else {
-                self.remaining_column_count = self.metadata.columns_count as usize;
+                self.remaining_columns_count = self.metadata.columns_count as usize;
                 self.remaining_rows_count -= 1;
                 self.next()
             }
@@ -309,11 +536,13 @@ impl<T: ColumnDecoder> Iterator for ColumnIter<T> {
 
 impl<T> ColumnValue for ColumnIter<T> {
     fn column_value<C: ColumnDecoder>(&mut self) -> anyhow::Result<C> {
+        self.remaining_columns_count -= 1;
         C::try_decode(self.decoder.reader())
     }
 }
 impl ColumnValue for AnyIter {
     fn column_value<C: ColumnDecoder>(&mut self) -> anyhow::Result<C> {
+        self.remaining_total_columns_count -= 1;
         C::try_decode(self.decoder.reader())
     }
 }

@@ -18,6 +18,9 @@ use crate::{
             MyCompression,
         },
         rows::AnyIter,
+        ColType,
+        ColumnSpec,
+        TableSpec,
     },
     prelude::Row,
 };
@@ -105,7 +108,12 @@ impl LwtDecoder {
         } else if decoder.is_rows() {
             Ok(AnyIter::new(decoder)?)
         } else {
-            Err(anyhow!("Decoder opcode is {}", decoder.opcode()))
+            let body_kind = decoder.header_flags.body_kind();
+            Err(anyhow!(
+                "Decoder opcode is {}, and body kind: {}",
+                decoder.opcode(),
+                body_kind,
+            ))
         }
     }
     /// Decode the provided Decoder with an deterministic Lwt result
@@ -475,11 +483,40 @@ impl Frame for Decoder {
         } else {
             paging_state = PagingState::new(None)
         }
-        Ok(Metadata::new(flags, columns_count, paging_state))
+        let mut global_table_spec = None;
+        let mut columns_specs = Vec::new();
+        if !flags.no_metadata() {
+            if flags.global_table_spec() {
+                let keyspace = string(self.reader())?;
+                let table_name = string(self.reader())?;
+                global_table_spec.replace(TableSpec::new(keyspace, table_name));
+                for _ in 0..columns_count {
+                    let col_name = string(self.reader())?;
+                    let col_type = ColType::try_from(self.reader())?;
+                    let col_spec = ColumnSpec::new(None, col_name, col_type);
+                    columns_specs.push(col_spec);
+                }
+            } else {
+                for _ in 0..columns_count {
+                    let keyspace = string(self.reader())?;
+                    let table_name = string(self.reader())?;
+                    let col_name = string(self.reader())?;
+                    let col_type = ColType::try_from(self.reader())?;
+                    let col_spec = ColumnSpec::new(TableSpec::new(keyspace, table_name).into(), col_name, col_type);
+                    columns_specs.push(col_spec);
+                }
+            }
+            columns_specs.reverse();
+        }
+        Ok(Metadata::new(
+            flags,
+            columns_count,
+            paging_state,
+            global_table_spec,
+            columns_specs,
+        ))
     }
 }
-
-// TODO remove length, and make sure slice.len() is more than enough.
 
 /// The column decoder trait to decode the frame.
 pub trait ColumnDecoder {
@@ -505,7 +542,8 @@ pub trait ColumnDecoder {
 
 impl<T: ColumnDecoder> ColumnDecoder for Option<T> {
     fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
-        let is_empty = reader.bytes().size_hint().0 == 0;
+        let size_hint = reader.bytes().size_hint();
+        let is_empty = size_hint.1.unwrap_or(size_hint.0) == 0;
         if is_empty {
             Ok(None)
         } else {
@@ -771,7 +809,7 @@ where
 impl ColumnDecoder for NaiveDate {
     fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
         let num_days = u32::try_decode_column(reader)? - (1u32 << 31);
-        let epoch = NaiveDate::from_ymd(1970, 1, 1);
+        let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).ok_or(anyhow::anyhow!("Out of range ymd"))?;
         Ok(epoch
             .checked_add_signed(chrono::Duration::days(num_days as i64))
             .ok_or(anyhow!("Overflowed epoch + duration::days"))?)
@@ -782,7 +820,8 @@ impl ColumnDecoder for NaiveTime {
     fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
         let nanos = u64::try_decode_column(reader)?;
         let (secs, nanos) = (nanos / 1_000_000_000, nanos % 1_000_000_000);
-        Ok(NaiveTime::from_num_seconds_from_midnight(secs as u32, nanos as u32))
+        Ok(NaiveTime::from_num_seconds_from_midnight_opt(secs as u32, nanos as u32)
+            .ok_or(anyhow::anyhow!("Out of range num_seconds_from_midnight"))?)
     }
 }
 
@@ -790,7 +829,8 @@ impl ColumnDecoder for NaiveDateTime {
     fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
         let millis = u64::try_decode_column(reader)?;
         let (secs, nanos) = (millis / 1_000, millis % 1_000 * 1_000_000);
-        Ok(NaiveDateTime::from_timestamp(secs as i64, nanos as u32))
+        Ok(NaiveDateTime::from_timestamp_opt(secs as i64, nanos as u32)
+            .ok_or(anyhow::anyhow!("Out of range timestamp"))?)
     }
 }
 
