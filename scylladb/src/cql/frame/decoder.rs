@@ -541,13 +541,20 @@ pub trait ColumnDecoder {
 }
 
 impl<T: ColumnDecoder> ColumnDecoder for Option<T> {
+    fn try_decode<R: Read>(reader: &mut R) -> anyhow::Result<Self>
+    where
+        Self: Sized,
+    {
+        Self::try_decode_column(reader)
+    }
+
     fn try_decode_column<R: Read>(reader: &mut R) -> anyhow::Result<Self> {
-        let size_hint = reader.bytes().size_hint();
-        let is_empty = size_hint.1.unwrap_or(size_hint.0) == 0;
-        if is_empty {
-            Ok(None)
+        let len = i32::try_decode_column(reader)?;
+        if len > 0 {
+            let mut handle = reader.take(len as u64);
+            Ok(Some(T::try_decode_column(&mut handle)?))
         } else {
-            T::try_decode_column(reader).map(Into::into)
+            Ok(None)
         }
     }
 }
