@@ -4,7 +4,6 @@ use super::{
     consistency::Consistency,
     encoder::{
         ColumnEncoder,
-        BE_8_BYTES_LEN,
         BE_NULL_BYTES_LEN,
         BE_UNSET_BYTES_LEN,
     },
@@ -246,7 +245,6 @@ impl QueryBuilder<QueryFlags> {
         // push SKIP_METADATA and TIMESTAMP query_flag to the buffer
         self.buffer.push(SKIP_METADATA | TIMESTAMP);
         // apply timestamp to query frame
-        self.buffer.extend(&BE_8_BYTES_LEN);
         self.buffer.extend(&i64::to_be_bytes(timestamp));
         // create query_build
         let query_build = QueryBuild;
@@ -372,7 +370,6 @@ impl QueryBuilder<QueryValues> {
         // add TIMESTAMP query_flag to the buffer
         self.buffer[self.stage.query_flags.index] |= TIMESTAMP;
         // apply timestamp to query frame
-        self.buffer.extend(&BE_8_BYTES_LEN);
         self.buffer.extend(&i64::to_be_bytes(timestamp));
         // modiy the buffer total value_count
         let start = self.stage.query_flags.index + 1;
@@ -439,10 +436,10 @@ impl QueryBuilder<QueryPagingState> {
     }
     /// Set the timestamp of the query frame.
     pub fn timestamp(mut self, timestamp: i64) -> QueryBuilder<QueryBuild> {
+        println!("invoked here timestamp in query {}", timestamp);
         // add TIMESTAMP query_flag to the buffer
         self.buffer[self.stage.query_flags.index] |= TIMESTAMP;
         // apply timestamp to query frame
-        self.buffer.extend(&BE_8_BYTES_LEN);
         self.buffer.extend(&i64::to_be_bytes(timestamp));
         // create query_build
         let query_build = QueryBuild;
@@ -481,10 +478,10 @@ impl QueryBuilder<QuerySerialConsistency> {
     }
     /// Set the timestamp of the query frame.
     pub fn timestamp(mut self, timestamp: i64) -> QueryBuilder<QueryBuild> {
+        println!("invoked timestamp in query {}", timestamp);
         // add TIMESTAMP query_flag to the buffer
         self.buffer[self.stage.query_flags.index] |= TIMESTAMP;
         // apply timestamp to query frame
-        self.buffer.extend(&BE_8_BYTES_LEN);
         self.buffer.extend(&i64::to_be_bytes(timestamp));
         // create query_build
         let query_build = QueryBuild;
@@ -511,7 +508,6 @@ impl QueryBuilder<QueryTimestamp> {
         // add TIMESTAMP query_flag to the buffer
         self.buffer[self.stage.query_flags.index] |= TIMESTAMP;
         // apply timestamp to query frame
-        self.buffer.extend(&BE_8_BYTES_LEN);
         self.buffer.extend(&i64::to_be_bytes(timestamp));
         // create query_build
         let query_build = QueryBuild;

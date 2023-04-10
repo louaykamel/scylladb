@@ -5,7 +5,6 @@ use super::{
     consistency::Consistency,
     encoder::{
         ColumnEncoder,
-        BE_8_BYTES_LEN,
         BE_NULL_BYTES_LEN,
         BE_UNSET_BYTES_LEN,
     },
@@ -353,7 +352,6 @@ impl<Type: Copy + Into<u8>> BatchBuilder<Type, BatchFlags> {
     pub fn timestamp(mut self, timestamp: i64) -> BatchBuilder<Type, BatchBuild> {
         // add timestamp byte for batch flags
         self.buffer.push(TIMESTAMP);
-        self.buffer.extend(&BE_8_BYTES_LEN);
         self.buffer.extend(&i64::to_be_bytes(timestamp));
         BatchBuilder {
             buffer: self.buffer,
@@ -379,7 +377,6 @@ impl<Type: Copy + Into<u8>> BatchBuilder<Type, BatchTimestamp> {
     /// Set the timestamp of the Batch frame.
     pub fn timestamp(mut self, timestamp: i64) -> BatchBuilder<Type, BatchBuild> {
         self.buffer.last_mut().map(|last_byte| *last_byte |= TIMESTAMP);
-        self.buffer.extend(&BE_8_BYTES_LEN);
         self.buffer.extend(&i64::to_be_bytes(timestamp));
         BatchBuilder {
             buffer: self.buffer,
